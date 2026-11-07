@@ -14,8 +14,8 @@ app has no network access at all.
 
 Pick an item (number keys `1`…`9`, `0` work inside a group) and Clipbot pastes it into
 the app you were in. The menu also has **Clear History…**, **Edit Snippets…**,
-**Settings…** and **Quit**. Clipbot has no menu bar icon. To get to Settings, open Clipbot
-again from Spotlight or Finder.
+**Settings…** and **Quit**. Clicking the clipboard icon in the menu bar opens the same menu. You
+can hide the icon in Settings, then reach Settings by opening Clipbot again from Spotlight.
 
 ## Install
 
