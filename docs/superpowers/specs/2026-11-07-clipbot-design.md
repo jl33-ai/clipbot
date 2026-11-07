@@ -159,10 +159,14 @@ Debug logging never includes clip content in any build.
 
 - Storage dir: `~/Library/Application Support/Clipbot/`, mode 0700, files 0600,
   excluded from Time Machine (`isExcludedFromBackup`).
-- A random 256-bit master key is created on first launch and stored in the login
-  Keychain as a generic password with
-  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` and non-synchronizable — never
-  in iCloud Keychain, never migrates to another device or backup.
+- Keys are **bound to this Mac's Secure Enclave**. The login Keychain item
+  (service `io.linus.clipbot`, non-synchronizable, default app-only ACL) holds
+  only a Secure Enclave P-256 key blob + a peer public key; the AES key is
+  HKDF(ECDH(SE key, peer)). The blob is useless on any other Mac, so the key
+  can't follow a Keychain migration or backup. (Found during build: the legacy
+  login Keychain ignores `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, so
+  storing a raw key there would *not* have been device-only.) Macs without a
+  Secure Enclave fall back to a raw key in the Keychain.
 - Everything is sealed with **AES-256-GCM (CryptoKit)**:
   - one file per clip holding all its representations,
   - an encrypted index (order, timestamps, display previews, dedupe tags),
