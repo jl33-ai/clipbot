@@ -8,6 +8,8 @@ public enum ClipyXML {
         let delegate = Delegate()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
+        // Imported files are untrusted: never fetch or expand external entities.
+        parser.shouldResolveExternalEntities = false
         guard parser.parse(), delegate.sawRoot else { throw parser.parserError ?? FormatError() }
         return delegate.folders
     }
