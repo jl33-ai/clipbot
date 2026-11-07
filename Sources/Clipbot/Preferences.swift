@@ -10,6 +10,7 @@ final class Preferences: ObservableObject {
     @Published var historyShortcut: Shortcut { didSet { save(historyShortcut, "shortcut.history") } }
     @Published var snippetsShortcut: Shortcut { didSet { save(snippetsShortcut, "shortcut.snippets") } }
     @Published var ignoredBundleIDs: [String] { didSet { d.set(ignoredBundleIDs, forKey: "ignoredBundleIDs") } }
+    @Published var showMenuBarIcon: Bool { didSet { d.set(showMenuBarIcon, forKey: "showMenuBarIcon") } }
 
     var hasConfiguredLoginItem: Bool {
         get { d.bool(forKey: "didConfigureLoginItem") }
@@ -35,6 +36,7 @@ final class Preferences: ObservableObject {
         historyShortcut = load("shortcut.history", .historyDefault)
         snippetsShortcut = load("shortcut.snippets", .snippetsDefault)
         ignoredBundleIDs = d.stringArray(forKey: "ignoredBundleIDs") ?? SecretFilter.defaultIgnoredBundleIDs.sorted()
+        showMenuBarIcon = d.object(forKey: "showMenuBarIcon") as? Bool ?? true
     }
 
     var filter: SecretFilter { SecretFilter(ignoredBundleIDs: Set(ignoredBundleIDs)) }

@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var editorWindow: NSWindow?
     private var bag: Set<AnyCancellable> = []
+    private var statusItem: NSStatusItem?
 
     private enum HotKeyID: UInt32, CaseIterable { case main = 1, history, snippets }
 
@@ -39,6 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watcher.onSecureInputStuck = { [weak self] holder in self?.warnSecureInput(holder) }
         watcher.start()
         installMainMenu()
+        prefs.$showMenuBarIcon
+            .receive(on: RunLoop.main)
+            .sink { [weak self] show in self?.setMenuBarIcon(show) }
+            .store(in: &bag)
 
         registerHotKeys()
         Publishers.Merge3(prefs.$mainShortcut.map { _ in () }, prefs.$historyShortcut.map { _ in () },
@@ -73,6 +78,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !h.register(prefs.snippetsShortcut, id: HotKeyID.snippets.rawValue, action: { [weak self] in self?.menu.show(.snippets) }) { conflicts.insert("snippets") }
         if prefs.shortcutConflicts != conflicts { prefs.shortcutConflicts = conflicts }
     }
+
+    // MARK: Menu bar icon
+
+    private func setMenuBarIcon(_ show: Bool) {
+        if show, statusItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            item.button?.image = NSImage(systemSymbolName: "list.clipboard", accessibilityDescription: "Clipbot")
+            item.button?.target = self
+            item.button?.action = #selector(statusItemClicked)
+            statusItem = item
+        } else if !show, let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
+    /// Clicking the icon doesn't change the frontmost app, so the picked item pastes where you were.
+    @objc private func statusItemClicked() { menu.show(.all) }
 
     // MARK: Windows
 

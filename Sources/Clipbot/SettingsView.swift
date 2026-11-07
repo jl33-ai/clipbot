@@ -27,6 +27,7 @@ struct SettingsView: View {
 
             Section("General") {
                 LabeledContent("Snippets") { Button("Edit Snippets…", action: onEditSnippets) }
+                Toggle("Show icon in menu bar", isOn: $prefs.showMenuBarIcon)
                 Toggle("Launch at login", isOn: Binding(
                     get: { loginStatus == .enabled || loginStatus == .requiresApproval },
                     set: { on in
