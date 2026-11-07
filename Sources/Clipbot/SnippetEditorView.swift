@@ -183,12 +183,14 @@ struct SnippetEditorView: View {
     private func exportXML() {
         let a = NSAlert()
         a.messageText = "Export snippets as an unencrypted file?"
-        a.informativeText = "The exported file is plain text, so anyone who can read it can see your snippets. Clipboard history is never exported."
+        a.informativeText = "The exported file is plain text, so anyone who can read it can see your snippets. Don't save it in a folder that syncs to iCloud or another cloud service. Clipboard history is never exported."
         a.addButton(withTitle: "Export…")
         a.addButton(withTitle: "Cancel")
         guard a.runModal() == .alertFirstButtonReturn else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "Clipbot Snippets.xml"
+        // Downloads isn't synced by iCloud Desktop & Documents.
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         panel.allowedContentTypes = [.xml]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let fm = FileManager.default

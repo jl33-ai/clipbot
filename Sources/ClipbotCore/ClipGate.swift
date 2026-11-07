@@ -14,7 +14,8 @@ public enum ClipGate {
         let types = items.flatMap { $0.types.map(\.rawValue) }
         if let reason = filter.dropReason(types: types, sourceBundleIDs: sourceBundleIDs) { return .dropped(reason) }
         guard let clip = ClipCapture.capture(items: items) else { return .skipped }
-        if let text = clip.text, SecretFilter.looksLikeSecret(text) { return .dropped(.secretPattern) }
+        // Every text form in the payload, whichever kind won (an image or PDF can carry text too).
+        if ClipCapture.allText(clip).contains(where: SecretFilter.looksLikeSecret) { return .dropped(.secretPattern) }
         return .record(clip)
     }
 }

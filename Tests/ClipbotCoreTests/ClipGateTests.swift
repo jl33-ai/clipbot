@@ -47,6 +47,24 @@ final class ClipGateTests: XCTestCase {
         XCTAssertEqual(gate(), .dropped(.secretPattern))
     }
 
+    func testSecretTextAlongsideImageIsDropped() {
+        // Spreadsheets put a picture of the cell next to its text.
+        let img = NSImage(size: NSSize(width: 10, height: 10), flipped: false) { r in NSColor.blue.setFill(); r.fill(); return true }
+        let item = NSPasteboardItem()
+        item.setData(img.tiffRepresentation!, forType: .tiff)
+        item.setString("AKIAIOSFODNN7EXAMPLE", forType: .string)
+        pb.writeObjects([item])
+        XCTAssertEqual(gate(), .dropped(.secretPattern))
+    }
+
+    func testSecretTextAlongsidePDFIsDropped() {
+        let item = NSPasteboardItem()
+        item.setData(Data("%PDF-1.4".utf8), forType: .pdf)
+        item.setString("sk_live_" + String(repeating: "Ab3", count: 9), forType: .string)
+        pb.writeObjects([item])
+        XCTAssertEqual(gate(), .dropped(.secretPattern))
+    }
+
     func testEmptyIsSkipped() {
         pb.setString("  ", forType: .string)
         XCTAssertEqual(gate(), .skipped)
@@ -61,8 +79,10 @@ final class UnusableKeyStore: KeyProviding, @unchecked Sendable {
         if unusable.contains(a) { throw KeyUnusableError() }
         return try inner.existingKey(a)
     }
+    var retired: [String] = []
     func createKey(_ a: String) throws -> SymmetricKey { unusable.remove(a); return try inner.createKey(a) }
     func deleteKey(_ a: String) throws { unusable.remove(a); try inner.deleteKey(a) }
+    func retireKey(_ a: String) throws { retired.append(a); unusable.remove(a) }
 }
 
 /// Keychain locked / access denied: must NOT quarantine (data is fine, key is just unavailable now).
@@ -70,6 +90,7 @@ final class LockedKeyStore: KeyProviding, @unchecked Sendable {
     func existingKey(_ a: String) throws -> SymmetricKey? { throw KeychainError(status: errSecInteractionNotAllowed) }
     func createKey(_ a: String) throws -> SymmetricKey { throw KeychainError(status: errSecInteractionNotAllowed) }
     func deleteKey(_ a: String) throws {}
+    func retireKey(_ a: String) throws {}
 }
 
 final class KeyRecoveryTests: XCTestCase {
@@ -84,6 +105,7 @@ final class KeyRecoveryTests: XCTestCase {
         let h = try HistoryStore(directory: dir, keys: keys)
         XCTAssertTrue(h.recoveredFromMissingKey)
         XCTAssertTrue(h.entries.isEmpty)
+        XCTAssertEqual(keys.retired, [HistoryStore.keyAccount], "the old key is set aside, never deleted")
         try h.add(textPayload("y"), kind: .text, preview: "y", thumbnail: nil)
         XCTAssertEqual(try HistoryStore(directory: dir, keys: keys).entries.map(\.preview), ["y"])
     }
@@ -105,6 +127,22 @@ final class KeyRecoveryTests: XCTestCase {
         XCTAssertThrowsError(try HistoryStore(directory: dir, keys: LockedKeyStore()))
         XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: dir.path).contains { $0.hasPrefix("Unreadable-") })
         XCTAssertEqual(try HistoryStore(directory: dir, keys: keys).entries.count, 1, "data intact once keychain unlocks")
+    }
+
+    func testKeychainRetireKeepsTheOldItem() throws {
+        let service = "io.linus.clipbot.tests", account = "retire-\(UUID().uuidString)"
+        let store = KeychainKeyStore(service: service)
+        let old = try store.createKey(account)
+        try store.retireKey(account)
+        XCTAssertNil(try store.existingKey(account))
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecMatchLimit as String: kSecMatchLimitAll, kSecReturnAttributes as String: true]
+        var out: CFTypeRef?
+        XCTAssertEqual(SecItemCopyMatching(q as CFDictionary, &out), errSecSuccess)
+        let accounts = ((out as? [[String: Any]]) ?? []).compactMap { $0[kSecAttrAccount as String] as? String }
+        let retired = try XCTUnwrap(accounts.first { $0.hasPrefix(account + ".unreadable-") })
+        XCTAssertEqual(try store.existingKey(retired).map { $0.withUnsafeBytes { Data($0) } }, old.withUnsafeBytes { Data($0) })
+        try store.deleteKey(retired)
     }
 
     func testKeychainStoreReportsCorruptItemAsUnusable() throws {
@@ -175,6 +213,19 @@ final class HardeningTests: XCTestCase {
         }
         XCTAssertTrue(Shortcut.mainDefault.isValid)
         XCTAssertTrue(Shortcut(keyCode: 9, modifierFlags: [.command, .option]).isValid)
+    }
+
+    func testHugeDeclaredImageGetsNoThumbnailAndDoesNotDecode() throws {
+        // A tiny PNG header claiming 60000×60000 px must not be decoded at full size.
+        var png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52])
+        png.append(contentsOf: [0x00, 0x00, 0xEA, 0x60, 0x00, 0x00, 0xEA, 0x60, 8, 6, 0, 0, 0, 0, 0, 0, 0])
+        XCTAssertNil(ClipCapture.thumbnail(fromImageData: png))
+    }
+
+    func testThumbnailFromNormalImage() throws {
+        let img = NSImage(size: NSSize(width: 300, height: 100), flipped: false) { r in NSColor.red.setFill(); r.fill(); return true }
+        let thumb = try XCTUnwrap(ClipCapture.thumbnail(fromImageData: img.tiffRepresentation!).flatMap(NSBitmapImageRep.init(data:)))
+        XCTAssertLessThanOrEqual(max(thumb.pixelsWide, thumb.pixelsHigh), 64)
     }
 
     func testExportDropsXMLIllegalCharactersAndReimports() throws {

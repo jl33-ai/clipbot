@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Clipbot", isDirectory: true)
-        let keys = KeychainKeyStore()
+        let keys = KeychainKeyStore(service: Bundle.main.bundleIdentifier ?? KeychainKeyStore.appService)
         do {
             history = try HistoryStore(directory: dir, keys: keys)
             snippets = try SnippetStore(directory: dir, keys: keys)

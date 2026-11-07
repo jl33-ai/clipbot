@@ -40,7 +40,8 @@ public struct SecretFilter: Sendable {
         dropReason(types: types, sourceBundleIDs: frontmostBundleID.map { [$0] } ?? []) != nil
     }
 
-    /// Single-token formats: the whole (trimmed) clip must be the token.
+    /// Token formats, matched against every token of the text (split on whitespace and the
+    /// punctuation that surrounds keys in .env files, shell exports, JSON and prose).
     private static let tokenPatterns: [String] = [
         #"^sk-[A-Za-z0-9_-]{32,}$"#,                 // OpenAI / Anthropic style
         #"^(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}$"#, // GitHub tokens
@@ -49,12 +50,17 @@ public struct SecretFilter: Sendable {
         #"^xox[abposr]-[A-Za-z0-9-]{10,}$"#,          // Slack
         #"^(sk|rk)_live_[A-Za-z0-9]{24,}$"#,          // Stripe live secret / restricted
     ]
-    private static let pemPattern = #"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"#
+    private static let pemPattern = #"-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"#
+    private static let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "=:\"'`,;()[]{}<>"))
+    /// Clips longer than this are only checked for PEM blocks (keeps huge pastes cheap).
+    private static let maxScannedLength = 200_000
 
     public static func looksLikeSecret(_ text: String) -> Bool {
         if text.range(of: pemPattern, options: .regularExpression) != nil { return true }
-        let token = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty, token.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return false }
-        return tokenPatterns.contains { token.range(of: $0, options: .regularExpression) != nil }
+        guard text.utf16.count <= maxScannedLength else { return false }
+        for token in text.components(separatedBy: separators) where token.count >= 20 {
+            if tokenPatterns.contains(where: { token.range(of: $0, options: .regularExpression) != nil }) { return true }
+        }
+        return false
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 
 public struct CapturedClip: Sendable, Equatable {
     public let payload: ClipPayload
@@ -57,9 +58,9 @@ public enum ClipCapture {
             return CapturedClip(payload: payload, kind: .file, preview: MenuModel.previewText(preview), thumbnail: nil)
         }
         if let imgRep = reps.first(where: { $0.type == NSPasteboard.PasteboardType.png.rawValue || $0.type == NSPasteboard.PasteboardType.tiff.rawValue }),
-           let image = NSImage(data: imgRep.data) {
-            let px = image.representations.first.map { "\($0.pixelsWide)×\($0.pixelsHigh)" } ?? ""
-            return CapturedClip(payload: payload, kind: .image, preview: px.isEmpty ? "Image" : "Image \(px)", thumbnail: thumbnail(image))
+           let size = imagePixelSize(imgRep.data) {
+            return CapturedClip(payload: payload, kind: .image, preview: "Image \(size.width)×\(size.height)",
+                                thumbnail: thumbnail(fromImageData: imgRep.data))
         }
         if has.contains(NSPasteboard.PasteboardType.pdf.rawValue), !has.contains(NSPasteboard.PasteboardType.string.rawValue) {
             return CapturedClip(payload: payload, kind: .pdf, preview: "PDF document", thumbnail: nil)
@@ -86,18 +87,44 @@ public enum ClipCapture {
         return CapturedClip(payload: payload, kind: rich ? .richText : .text, preview: preview, thumbnail: nil, text: text)
     }
 
-    /// PNG no larger than 64 px on its long edge (32 pt @2x).
-    static func thumbnail(_ image: NSImage) -> Data? {
-        guard let src = image.representations.first, src.pixelsWide > 0, src.pixelsHigh > 0 else { return nil }
-        let scale = min(1, Double(thumbnailPixels) / Double(max(src.pixelsWide, src.pixelsHigh)))
-        let w = max(1, Int(Double(src.pixelsWide) * scale)), h = max(1, Int(Double(src.pixelsHigh) * scale))
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8,
-                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        image.draw(in: NSRect(x: 0, y: 0, width: w, height: h))
-        NSGraphicsContext.restoreGraphicsState()
-        return rep.representation(using: .png, properties: [:])
+    /// Every text form in a clip: plain string, URL, and text extracted from RTF/RTFD.
+    public static func allText(_ clip: CapturedClip) -> [String] {
+        var out = clip.text.map { [$0] } ?? []
+        for rep in clip.payload.representations {
+            switch NSPasteboard.PasteboardType(rep.type) {
+            case .string, .URL: if let s = String(data: rep.data, encoding: .utf8) { out.append(s) }
+            case .rtf: if let s = NSAttributedString(rtf: rep.data, documentAttributes: nil)?.string { out.append(s) }
+            case .rtfd: if let s = NSAttributedString(rtfd: rep.data, documentAttributes: nil)?.string { out.append(s) }
+            default: break
+            }
+        }
+        return out
+    }
+
+    /// Images declaring more pixels than this get no thumbnail (they'd need GBs to decode).
+    static let maxThumbnailSourcePixels = 100_000_000
+
+    /// Pixel size from the image header, without decoding the image.
+    static func imagePixelSize(_ data: Data) -> (width: Int, height: Int)? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
+              w > 0, h > 0 else { return nil }
+        return (w, h)
+    }
+
+    /// PNG no larger than 64 px on its long edge (32 pt @2x), made by ImageIO's downsampler so the
+    /// full image is never decoded. nil for images whose declared size is unreasonable.
+    public static func thumbnail(fromImageData data: Data) -> Data? {
+        guard let size = imagePixelSize(data), size.width * size.height <= maxThumbnailSourcePixels,
+              let src = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: thumbnailPixels,
+            kCGImageSourceShouldCacheImmediately: false,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        return NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])
     }
 }

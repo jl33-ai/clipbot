@@ -28,6 +28,17 @@ for lib in "$BIN" "$CORE"; do
 done
 
 PLIST="$APP/Contents/Info.plist"
+[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = "io.linus.clipbot" ] \
+  && pass "bundle id io.linus.clipbot" || fail "unexpected bundle id"
+DEBUG_APP="build/Build/Products/Debug/Clipbot Debug.app"
+if [ -d "build/Build/Products/Debug/Clipbot.app" ]; then fail "stale Debug build shares the real app's identity: build/Build/Products/Debug/Clipbot.app"; fi
+if [ -d "$DEBUG_APP" ]; then
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$DEBUG_APP/Contents/Info.plist")" != "io.linus.clipbot" ] \
+    && pass "Debug build has its own identity (can't open real data)" || fail "Debug build shares the real bundle id"
+fi
+OWNER=$(stat -f %Su "$APP")
+[ "$OWNER" = "root" ] && pass "app bundle owned by root (can't be swapped without admin)" \
+  || echo "  note app bundle owned by $OWNER — run 'scripts/install.sh --lock' to make it root-owned"
 for key in CFBundleURLTypes CFBundleDocumentTypes NSServices NSAppleScriptEnabled OSAScriptingDefinition NSExtension; do
   /usr/libexec/PlistBuddy -c "Print :$key" "$PLIST" >/dev/null 2>&1 && fail "Info.plist exposes $key" || true
 done

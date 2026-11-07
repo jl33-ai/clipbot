@@ -30,7 +30,7 @@ final class SecretFilterTests: XCTestCase {
 
     func testSecretPatterns() {
         let a40 = String(repeating: "aB3", count: 14)
-        let secrets = [
+        let secrets: [String] = [
             "sk-proj-" + a40,
             "sk-ant-api03-" + a40,
             "sk-" + a40,
@@ -45,16 +45,21 @@ final class SecretFilterTests: XCTestCase {
             "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----",
             "here is my key:\n-----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY-----\n",
             "  \n ghp_" + String(a40.prefix(36)) + "\n",
+            // Embedded in a line: .env files, shell exports, JSON, prose.
+            "OPENAI_API_KEY=sk-proj-" + a40,
+            "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+            "{\"token\": \"ghp_" + String(a40.prefix(36)) + "\"}",
+            "my key is sk-" + String(repeating: "a", count: 40) + " and more words",
+            "-----BEGIN PGP PRIVATE KEY BLOCK-----\nabc\n-----END PGP PRIVATE KEY BLOCK-----",
         ]
         for s in secrets { XCTAssertTrue(SecretFilter.looksLikeSecret(s), s) }
     }
 
     func testNonSecretsKept() {
-        let kept = [
+        let kept: [String] = [
             "sk-", "ask-me later", "Hello AKIA", "ghp_short", "AKIA",
             "I pushed it to github and opened a PR",
             "https://github.com/x", "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
-            "sk-" + String(repeating: "a", count: 40) + " and more words",
             "Take the chance now to clean up any code that was rushed",
             "", "😀👍🏽",
         ]

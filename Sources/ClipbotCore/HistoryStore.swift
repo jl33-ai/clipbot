@@ -56,9 +56,15 @@ public final class HistoryStore {
         sweepOrphans()
     }
 
-    /// A key that exists but can't be unwrapped counts as missing; Keychain errors still throw.
+    /// A key that exists but can't be unwrapped is retired (renamed, kept) and counts as missing;
+    /// Keychain errors (locked, denied) still throw so nothing is quarantined on a transient failure.
     static func usableKey(_ keys: KeyProviding, _ account: String) throws -> SymmetricKey? {
-        do { return try keys.existingKey(account) } catch is KeyUnusableError { return nil }
+        do {
+            return try keys.existingKey(account)
+        } catch is KeyUnusableError {
+            try keys.retireKey(account)
+            return nil
+        }
     }
 
     // MARK: Public API

@@ -9,6 +9,8 @@ public protocol KeyProviding: AnyObject, Sendable {
     /// Creates a fresh random 256-bit key, replacing any existing one.
     func createKey(_ account: String) throws -> SymmetricKey
     func deleteKey(_ account: String) throws
+    /// Moves an unusable key aside (renamed, never deleted) so a fresh one can be created.
+    func retireKey(_ account: String) throws
 }
 
 /// The Keychain item exists but can't be turned into a key (moved from another Mac, Secure Enclave
@@ -68,6 +70,15 @@ public final class KeychainKeyStore: KeyProviding, @unchecked Sendable {
         return key
     }
 
+    public func retireKey(_ account: String) throws {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        let update: [String: Any] = [kSecAttrAccount as String: "\(account).unreadable-\(f.string(from: Date()))"]
+        let status = SecItemUpdate(base(account) as CFDictionary, update as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
+    }
+
     // MARK: Secure Enclave wrapping
     //
     // The legacy login Keychain ignores the …ThisDeviceOnly accessibility class, and the login
@@ -87,7 +98,9 @@ public final class KeychainKeyStore: KeyProviding, @unchecked Sendable {
         return (stored, try derive(se: se, peer: peer.publicKey, account: account))
     }
 
-    private static func unwrap(_ data: Data, account: String) throws -> SymmetricKey {
+    private static func unwrap(_ data: Data, account rawAccount: String) throws -> SymmetricKey {
+        // A retired key keeps deriving under its original account name.
+        let account = rawAccount.components(separatedBy: ".unreadable-").first ?? rawAccount
         let bytes = Data(data)
         switch bytes.first {
         case 0 where bytes.count == 33:
@@ -126,4 +139,7 @@ public final class InMemoryKeyStore: KeyProviding, @unchecked Sendable {
         return k
     }
     public func deleteKey(_ account: String) throws { _ = lock.withLock { keys.removeValue(forKey: account) } }
+    public func retireKey(_ account: String) throws {
+        lock.withLock { if let k = keys.removeValue(forKey: account) { keys["\(account).unreadable"] = k } }
+    }
 }
