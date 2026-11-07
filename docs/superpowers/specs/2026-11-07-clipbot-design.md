@@ -231,8 +231,8 @@ Debug logging never includes clip content in any build.
   recording nothing.
 - Clipboard change detection: poll `NSPasteboard.general.changeCount` (there is
   no notification API); ~0.5 s interval, cheap.
-- Signing: use the stable **"Apple Development (company team, not used)"**
-  identity, so Accessibility/Keychain grants survive rebuilds (ad-hoc signing
+- Signing: use the stable Apple Development certificate of the **personal team 8L83KP4DT8**
+  (selected by team in `project.yml`), so Accessibility/Keychain grants survive rebuilds (ad-hoc signing
   would reset them every build). Built and installed locally to
   `/Applications/Clipbot.app`.
 - Global hotkeys via Carbon `RegisterEventHotKey` (no dependency).
