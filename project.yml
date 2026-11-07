@@ -35,6 +35,10 @@ targets:
         PRODUCT_NAME: Clipbot
         INFOPLIST_FILE: Config/Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/Clipbot.entitlements
+      configs:
+        Release:
+          # No get-task-allow: nothing may attach a debugger and read decrypted clips from memory.
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
   ClipbotCoreTests:
     type: bundle.unit-test
     platform: macOS
