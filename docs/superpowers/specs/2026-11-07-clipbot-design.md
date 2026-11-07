@@ -189,6 +189,34 @@ Debug logging never includes clip content in any build.
   the binary links no networking frameworks/symbols (`URLSession`, `Network`,
   `CFNetwork` sockets). Either way, report which path was taken.
 
+### 4. Hardening (added at Linus's request: "absolutely locked down")
+
+- **Spike result:** a sandboxed build *can* synthesise ⌘V (verified 2026-11-07),
+  so the App Sandbox with no network entitlement ships. The OS blocks networking.
+- **Universal Clipboard:** every pasteboard write Clipbot makes uses
+  `prepareForNewContents(with: .currentHostOnly)`, so pasted history/snippets
+  never sync to Linus's other Apple devices via Handoff.
+- **Secure input:** if `IsSecureEventInputEnabled()` is true when a change is
+  seen (a password field has focus somewhere), the change is dropped.
+- **Hardened Runtime with zero exceptions** (no JIT, no unsigned memory, no
+  DYLD env vars, library validation on, no `get-task-allow` in Release).
+- **No entry points:** no URL scheme, no AppleScript dictionary, no Services, no
+  XPC, no document types, no plugins/bundles loaded. Only entitlement is
+  `app-sandbox` (+ `files.user-selected.read-write` for snippet import/export
+  panels).
+- **Keychain items** are created by the app, so their default ACL trusts only
+  Clipbot's code signature; other apps get a user prompt.
+- **Memory:** decrypted payloads are scoped to the paste/thumbnail call and not
+  cached; no clip content in logs, `print`, `os_log`, crash breadcrumbs or
+  exceptions.
+- **Pasteboard reads** inspect `types` (metadata) before any data is read; data
+  is read only after the filter passes.
+- **CI-style checks** (`scripts/check-security.sh`): the binary links no
+  networking frameworks, entitlements are exactly the allowed set, Hardened
+  Runtime flag set, and the canary no-plaintext test passes.
+- Out of Clipbot's control (documented in README): turn on FileVault, and
+  optionally disable Handoff to stop *other* apps' copies syncing.
+
 ## Constraints
 
 - Linus runs macOS 27 (Xcode 27, Swift 6.4). Deployment target macOS 15 or

@@ -1,0 +1,54 @@
+name: Clipbot
+options:
+  bundleIdPrefix: io.linus
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    DEVELOPMENT_TEAM: 8L83KP4DT8
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Apple Development (personal team)"
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ClipbotCore:
+    type: framework
+    platform: macOS
+    sources: [Sources/ClipbotCore]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot.core
+        GENERATE_INFOPLIST_FILE: YES
+  Clipbot:
+    type: application
+    platform: macOS
+    sources: [Sources/Clipbot]
+    dependencies:
+      - target: ClipbotCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot
+        PRODUCT_NAME: Clipbot
+        INFOPLIST_FILE: Config/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Clipbot.entitlements
+  ClipbotCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests/ClipbotCoreTests]
+    dependencies:
+      - target: ClipbotCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Clipbot:
+    build:
+      targets:
+        Clipbot: all
+    test:
+      targets: [ClipbotCoreTests]
