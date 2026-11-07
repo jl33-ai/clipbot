@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var editorWindow: NSWindow?
     private var bag: Set<AnyCancellable> = []
 
-    private enum HotKeyID: UInt32 { case main = 1, history, snippets }
+    private enum HotKeyID: UInt32, CaseIterable { case main = 1, history, snippets }
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -36,10 +36,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onClearHistory = { [weak self] in self?.confirmClearHistory() }
         menu.onEditSnippets = { [weak self] in self?.showSnippetEditor() }
         menu.onSettings = { [weak self] in self?.showSettings() }
+        watcher.onSecureInputStuck = { [weak self] holder in self?.warnSecureInput(holder) }
         watcher.start()
+        installMainMenu()
 
         registerHotKeys()
-        prefs.objectWillChange
+        Publishers.Merge3(prefs.$mainShortcut.map { _ in () }, prefs.$historyShortcut.map { _ in () },
+                          prefs.$snippetsShortcut.map { _ in () })
+            .dropFirst(3)
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.registerHotKeys() }
             .store(in: &bag)
@@ -47,7 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureLoginItemOnFirstLaunch()
         warnAboutRecoveredStores()
         if Permissions.pasteboardAccess == .denied { warnPasteboardDenied() }
-        if !Permissions.accessibilityTrusted { Permissions.requestAccessibility() }
+        if !Permissions.accessibilityTrusted, !prefs.hasPromptedAccessibility {
+            prefs.hasPromptedAccessibility = true
+            Permissions.requestAccessibility()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
@@ -59,9 +66,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerHotKeys() {
         let h = HotKeys.shared
-        h.register(prefs.mainShortcut, id: HotKeyID.main.rawValue) { [weak self] in self?.menu.show(.all) }
-        h.register(prefs.historyShortcut, id: HotKeyID.history.rawValue) { [weak self] in self?.menu.show(.history) }
-        h.register(prefs.snippetsShortcut, id: HotKeyID.snippets.rawValue) { [weak self] in self?.menu.show(.snippets) }
+        for id in HotKeyID.allCases { h.unregister(id.rawValue) }
+        var conflicts: Set<String> = []
+        if !h.register(prefs.mainShortcut, id: HotKeyID.main.rawValue, action: { [weak self] in self?.menu.show(.all) }) { conflicts.insert("main") }
+        if !h.register(prefs.historyShortcut, id: HotKeyID.history.rawValue, action: { [weak self] in self?.menu.show(.history) }) { conflicts.insert("history") }
+        if !h.register(prefs.snippetsShortcut, id: HotKeyID.snippets.rawValue, action: { [weak self] in self?.menu.show(.snippets) }) { conflicts.insert("snippets") }
+        if prefs.shortcutConflicts != conflicts { prefs.shortcutConflicts = conflicts }
     }
 
     // MARK: Windows
@@ -70,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             let view = SettingsView(prefs: prefs,
                                     onClearHistory: { [weak self] in self?.confirmClearHistory() },
+                                    onEditSnippets: { [weak self] in self?.showSnippetEditor() },
                                     onRecording: { HotKeys.shared.setSuspended($0) })
             settingsWindow = makeWindow(title: "Clipbot Settings", view: view, size: NSSize(width: 520, height: 640))
         }
@@ -89,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         w.setContentSize(size)
         w.isReleasedWhenClosed = false
+        w.isRestorable = false // never let window state (which can include snippet text) be saved
         w.center()
         return w
     }
@@ -96,6 +108,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func present(_ w: NSWindow?) {
         NSApp.activate()
         w?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Standard Edit/Window menu so ⌘C/⌘V/⌘X/⌘A/⌘Z/⌘W work in Clipbot's windows (invisible for an agent app).
+    private func installMainMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Quit Clipbot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit
+        main.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowItem.submenu = window
+        main.addItem(windowItem)
+        NSApp.mainMenu = main
+    }
+
+    private func warnSecureInput(_ holder: String?) {
+        let a = NSAlert()
+        a.messageText = "Clipbot isn't recording copies right now"
+        a.informativeText = "Secure keyboard input is on\(holder.map { " (held by \($0))" } ?? ""), so Clipbot skips everything you copy — that's how it keeps passwords out. This normally lasts only while a password field is focused. If it keeps happening, the app above may have \"Secure Keyboard Entry\" turned on."
+        NSApp.activate()
+        a.runModal()
     }
 
     // MARK: Actions & alerts

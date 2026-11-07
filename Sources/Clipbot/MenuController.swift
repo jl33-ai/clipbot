@@ -22,7 +22,13 @@ final class MenuController: NSObject {
         self.paster = paster
     }
 
+    private var isShowing = false
+
     func show(_ mode: MenuMode) {
+        // A hotkey can arrive while the menu (or an alert from it) is already up; never nest.
+        guard !isShowing else { return }
+        isShowing = true
+        defer { isShowing = false }
         let front = NSWorkspace.shared.frontmostApplication
         let target = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
         pick = nil

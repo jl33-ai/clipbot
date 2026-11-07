@@ -1,10 +1,12 @@
 import AppKit
 
-public struct CapturedClip: Sendable {
+public struct CapturedClip: Sendable, Equatable {
     public let payload: ClipPayload
     public let kind: ClipKind
     public let preview: String
     public let thumbnail: Data?
+    /// Full text of the clip (plain, URL, or extracted from RTF/RTFD), for secret checks. Not stored.
+    public var text: String? = nil
 }
 
 /// Turns the current pasteboard contents into a clip. Call only after `SecretFilter` has passed
@@ -16,7 +18,12 @@ public enum ClipCapture {
     static let thumbnailPixels = 64
 
     public static func capture(from pb: NSPasteboard) -> CapturedClip? {
-        guard let items = pb.pasteboardItems, let first = items.first else { return nil }
+        capture(items: pb.pasteboardItems ?? [])
+    }
+
+    /// Reads from exactly these item objects, so the data matches the types that were checked.
+    public static func capture(items: [NSPasteboardItem]) -> CapturedClip? {
+        guard let first = items.first else { return nil }
         var reps: [ClipRepresentation] = []
         var total = 0
 
@@ -58,7 +65,7 @@ public enum ClipCapture {
             return CapturedClip(payload: payload, kind: .pdf, preview: "PDF document", thumbnail: nil)
         }
         if let url = string(.URL), string(.string).map({ $0 == url }) ?? true {
-            return CapturedClip(payload: payload, kind: .url, preview: MenuModel.previewText(url), thumbnail: nil)
+            return CapturedClip(payload: payload, kind: .url, preview: MenuModel.previewText(url), thumbnail: nil, text: url)
         }
         var text = string(.string)
         if text == nil, let rtf = reps.first(where: { $0.type == NSPasteboard.PasteboardType.rtf.rawValue }) {
@@ -76,7 +83,7 @@ public enum ClipCapture {
             return nil
         }
         let rich = has.contains(NSPasteboard.PasteboardType.rtf.rawValue) || has.contains(NSPasteboard.PasteboardType.rtfd.rawValue)
-        return CapturedClip(payload: payload, kind: rich ? .richText : .text, preview: preview, thumbnail: nil)
+        return CapturedClip(payload: payload, kind: rich ? .richText : .text, preview: preview, thumbnail: nil, text: text)
     }
 
     /// PNG no larger than 64 px on its long edge (32 pt @2x).

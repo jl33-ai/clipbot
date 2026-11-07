@@ -27,10 +27,17 @@ public struct SecretFilter: Sendable {
         self.ignoredBundleIDs = ignoredBundleIDs
     }
 
+    public enum Reason: Equatable, Sendable { case marker, ignoredApp, secretPattern }
+
+    /// Metadata-only check. `sourceBundleIDs` = every app that was frontmost since the last change.
+    public func dropReason(types: [String], sourceBundleIDs: Set<String>) -> Reason? {
+        if types.contains(where: Self.markerTypes.contains) { return .marker }
+        if !ignoredBundleIDs.isDisjoint(with: sourceBundleIDs) { return .ignoredApp }
+        return nil
+    }
+
     public func shouldDropBeforeRead(types: [String], frontmostBundleID: String?) -> Bool {
-        if types.contains(where: Self.markerTypes.contains) { return true }
-        if let id = frontmostBundleID, ignoredBundleIDs.contains(id) { return true }
-        return false
+        dropReason(types: types, sourceBundleIDs: frontmostBundleID.map { [$0] } ?? []) != nil
     }
 
     /// Single-token formats: the whole (trimmed) clip must be the token.

@@ -26,11 +26,19 @@ public final class SnippetStore: ObservableObject {
         var recovered = false
         var loaded: [SnippetFolder] = []
 
-        if let key = try keys.existingKey(Self.keyAccount) {
+        var needsMigration = false
+        if let key = try HistoryStore.usableKey(keys, Self.keyAccount) {
             sealer = Sealer(key: key)
             if exists {
                 do {
-                    loaded = try JSONDecoder().decode([SnippetFolder].self, from: sealer.open(Data(contentsOf: fileURL)))
+                    let sealed = try Data(contentsOf: fileURL)
+                    if let plain = try? sealer.open(sealed, context: Self.context) {
+                        loaded = try JSONDecoder().decode([SnippetFolder].self, from: plain)
+                    } else {
+                        // Files written before AAD binding (2026-11-07 builds): read once, re-save bound.
+                        loaded = try JSONDecoder().decode([SnippetFolder].self, from: sealer.open(sealed))
+                        needsMigration = true
+                    }
                 } catch {
                     try SecureFiles.quarantine([Self.fileName], in: directory)
                     recovered = true
@@ -46,12 +54,15 @@ public final class SnippetStore: ObservableObject {
         recoveredFromMissingKey = recovered
         folders = loaded
         loading = false
+        if needsMigration { save() }
     }
+
+    private static let context = "io.linus.clipbot/snippets/v1"
 
     private func save() {
         guard !loading else { return }
         do {
-            try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(folders)), to: fileURL)
+            try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(folders), context: Self.context), to: fileURL)
             lastSaveError = nil
         } catch {
             lastSaveError = error.localizedDescription

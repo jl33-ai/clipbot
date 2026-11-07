@@ -7,9 +7,11 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var prefs: Preferences
     let onClearHistory: () -> Void
+    let onEditSnippets: () -> Void
     let onRecording: (Bool) -> Void
 
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var loginStatus = SMAppService.mainApp.status
+    @State private var secureInput = PasteboardWatcher.secureInputOn
     @State private var axTrusted = Permissions.accessibilityTrusted
     @State private var pbAccess = Permissions.pasteboardAccess
     @State private var selectedIgnored: String?
@@ -18,23 +20,22 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Shortcuts") {
-                LabeledContent("History & snippets") {
-                    ShortcutRecorder(shortcut: $prefs.mainShortcut, defaultValue: .mainDefault, onRecording: onRecording)
-                }
-                LabeledContent("History only") {
-                    ShortcutRecorder(shortcut: $prefs.historyShortcut, defaultValue: .historyDefault, onRecording: onRecording)
-                }
-                LabeledContent("Snippets only") {
-                    ShortcutRecorder(shortcut: $prefs.snippetsShortcut, defaultValue: .snippetsDefault, onRecording: onRecording)
-                }
+                shortcutRow("History & snippets", $prefs.mainShortcut, .mainDefault, "main")
+                shortcutRow("History only", $prefs.historyShortcut, .historyDefault, "history")
+                shortcutRow("Snippets only", $prefs.snippetsShortcut, .snippetsDefault, "snippets")
             }
 
             Section("General") {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, on in
+                LabeledContent("Snippets") { Button("Edit Snippets…", action: onEditSnippets) }
+                Toggle("Launch at login", isOn: Binding(
+                    get: { loginStatus == .enabled || loginStatus == .requiresApproval },
+                    set: { on in
                         do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() } catch {}
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
-                    }
+                        loginStatus = SMAppService.mainApp.status
+                    }))
+                if loginStatus == .requiresApproval {
+                    Text("Approve Clipbot in System Settings → General → Login Items.").foregroundStyle(.secondary)
+                }
             }
 
             Section("Permissions") {
@@ -42,6 +43,10 @@ struct SettingsView: View {
                 permissionRow("Clipboard access", ok: pbAccess == .allowed,
                               detail: pbAccess == .ask ? "macOS will ask each time" : nil,
                               action: Permissions.openPrivacySettings)
+                if secureInput {
+                    Label("Secure keyboard input is on — copies aren't recorded until it's off.", systemImage: "lock.fill")
+                        .foregroundStyle(.orange)
+                }
             }
 
             Section {
@@ -65,7 +70,7 @@ struct SettingsView: View {
             } header: {
                 Text("Never record copies from")
             } footer: {
-                Text("Passwords copied from 1Password, Apple Passwords and other password managers are always skipped, whatever this list says. Anything copied while a password field is focused is skipped too.")
+                Text("Copies that password managers mark as passwords (1Password, Apple Passwords and others that follow the standard) are always skipped. Copies made in the apps above are skipped, and so is anything copied while a password field has focus.")
                     .foregroundStyle(.secondary)
             }
 
@@ -82,7 +87,19 @@ struct SettingsView: View {
         .onReceive(refresh) { _ in
             axTrusted = Permissions.accessibilityTrusted
             pbAccess = Permissions.pasteboardAccess
-            launchAtLogin = SMAppService.mainApp.status == .enabled
+            loginStatus = SMAppService.mainApp.status
+            secureInput = PasteboardWatcher.secureInputOn
+        }
+    }
+
+    private func shortcutRow(_ title: String, _ binding: Binding<Shortcut>, _ def: Shortcut, _ key: String) -> some View {
+        LabeledContent {
+            ShortcutRecorder(shortcut: binding, defaultValue: def, onRecording: onRecording)
+        } label: {
+            Text(title)
+            if prefs.shortcutConflicts.contains(key) {
+                Text("Already in use by another app or shortcut").foregroundStyle(.red)
+            }
         }
     }
 

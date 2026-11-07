@@ -15,6 +15,12 @@ final class Preferences: ObservableObject {
         get { d.bool(forKey: "didConfigureLoginItem") }
         set { d.set(newValue, forKey: "didConfigureLoginItem") }
     }
+    var hasPromptedAccessibility: Bool {
+        get { d.bool(forKey: "didPromptAccessibility") }
+        set { d.set(newValue, forKey: "didPromptAccessibility") }
+    }
+    /// Shortcuts that failed to register (taken by another app or each other). Not persisted.
+    @Published var shortcutConflicts: Set<String> = []
     var hasShownAccessibilityHelp: Bool {
         get { d.bool(forKey: "didShowAccessibilityHelp") }
         set { d.set(newValue, forKey: "didShowAccessibilityHelp") }

@@ -13,8 +13,12 @@ public enum ClipyXML {
     }
 
     public static func export(_ folders: [SnippetFolder]) -> Data {
-        func esc(_ s: String) -> String {
-            s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+        func esc(_ raw: String) -> String {
+            // XML 1.0 forbids most C0 controls and U+FFFE/FFFF; drop them so the file re-imports.
+            let s = String(String.UnicodeScalarView(raw.unicodeScalars.filter { u in
+                u == "\t" || u == "\n" || u == "\r" || (u.value >= 0x20 && u.value != 0xFFFE && u.value != 0xFFFF)
+            }))
+            return s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
                 .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
         }
         var out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<folders>"

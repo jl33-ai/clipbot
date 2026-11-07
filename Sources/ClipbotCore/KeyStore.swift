@@ -3,11 +3,18 @@ import Foundation
 import Security
 
 public protocol KeyProviding: AnyObject, Sendable {
-    /// nil when no key exists; throws when the Keychain can't be read.
+    /// nil when no key exists; throws `KeyUnusableError` when the item exists but can't be unwrapped,
+    /// and `KeychainError` when the Keychain can't be read right now (locked, denied).
     func existingKey(_ account: String) throws -> SymmetricKey?
     /// Creates a fresh random 256-bit key, replacing any existing one.
     func createKey(_ account: String) throws -> SymmetricKey
     func deleteKey(_ account: String) throws
+}
+
+/// The Keychain item exists but can't be turned into a key (moved from another Mac, Secure Enclave
+/// reset, damaged). Stores treat this like a missing key: quarantine and start fresh.
+public struct KeyUnusableError: Error {
+    public init() {}
 }
 
 public struct KeychainError: Error, CustomStringConvertible {
@@ -46,7 +53,7 @@ public final class KeychainKeyStore: KeyProviding, @unchecked Sendable {
         do {
             return try Self.unwrap(data, account: account)
         } catch {
-            throw KeychainError(status: errSecDecode)
+            throw KeyUnusableError()
         }
     }
 

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Encrypted clipboard history: `index.bin` (sealed JSON of entries, newest first) plus one sealed
@@ -33,7 +34,7 @@ public final class HistoryStore {
         let hasData = fm.fileExists(atPath: directory.appendingPathComponent(Self.indexName).path)
             || !((try? fm.contentsOfDirectory(atPath: directory.appendingPathComponent(Self.clipsName).path)) ?? []).isEmpty
 
-        if let key = try keys.existingKey(Self.keyAccount) {
+        if let key = try Self.usableKey(keys, Self.keyAccount) {
             sealer = Sealer(key: key)
             if hasData {
                 do {
@@ -52,6 +53,12 @@ public final class HistoryStore {
         }
         try SecureFiles.ensureDirectory(clipsURL)
         try dropEntriesWithMissingFiles()
+        sweepOrphans()
+    }
+
+    /// A key that exists but can't be unwrapped counts as missing; Keychain errors still throw.
+    static func usableKey(_ keys: KeyProviding, _ account: String) throws -> SymmetricKey? {
+        do { return try keys.existingKey(account) } catch is KeyUnusableError { return nil }
     }
 
     // MARK: Public API
@@ -63,7 +70,7 @@ public final class HistoryStore {
             return
         }
         let entry = ClipEntry(id: UUID(), lastUsed: Date(), kind: kind, preview: preview, thumbnail: thumbnail, tag: tag)
-        try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(payload)), to: clipURL(entry.id))
+        try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(payload), context: Self.clipContext(entry.id)), to: clipURL(entry.id))
         entries.insert(entry, at: 0)
         let evicted = entries.count > capacity ? Array(entries[capacity...]) : []
         entries.removeLast(evicted.count)
@@ -74,7 +81,7 @@ public final class HistoryStore {
     /// Decrypts a clip's payload. A clip that fails authentication is removed from history.
     public func payload(for id: UUID) throws -> ClipPayload {
         do {
-            return try JSONDecoder().decode(ClipPayload.self, from: sealer.open(Data(contentsOf: clipURL(id))))
+            return try JSONDecoder().decode(ClipPayload.self, from: sealer.open(Data(contentsOf: clipURL(id)), context: Self.clipContext(id)))
         } catch {
             try? remove(id)
             throw error
@@ -109,11 +116,27 @@ public final class HistoryStore {
     }
 
     private func loadIndex() throws -> [ClipEntry] {
-        try JSONDecoder().decode([ClipEntry].self, from: sealer.open(Data(contentsOf: indexURL)))
+        try JSONDecoder().decode([ClipEntry].self, from: sealer.open(Data(contentsOf: indexURL), context: Self.indexContext))
     }
 
     private func saveIndex() throws {
-        try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(entries)), to: indexURL)
+        try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(entries), context: Self.indexContext), to: indexURL)
+    }
+
+    private static let indexContext = "io.linus.clipbot/index/v1"
+    private static func clipContext(_ id: UUID) -> String { "io.linus.clipbot/clip/v1/\(id.uuidString)" }
+
+    /// Removes clip files (and stray temp files) that no index entry references, e.g. after a crash.
+    private func sweepOrphans() {
+        let fm = FileManager.default
+        let known = Set(entries.map { "\($0.id.uuidString).bin" })
+        for dir in [clipsURL, directory] {
+            for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] {
+                let orphanClip = dir == clipsURL && !known.contains(name)
+                let strayTemp = name.hasPrefix(".") && name.hasSuffix(".tmp")
+                if orphanClip || strayTemp { try? fm.removeItem(at: dir.appendingPathComponent(name)) }
+            }
+        }
     }
 
     private func dropEntriesWithMissingFiles() throws {

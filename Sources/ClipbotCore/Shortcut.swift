@@ -24,8 +24,11 @@ public struct Shortcut: Codable, Equatable, Hashable, Sendable {
     public static let historyDefault = Shortcut(keyCode: UInt32(kVK_ANSI_V), carbonModifiers: UInt32(cmdKey | controlKey))
     public static let snippetsDefault = Shortcut(keyCode: UInt32(kVK_ANSI_B), carbonModifiers: UInt32(cmdKey | shiftKey))
 
-    /// Needs ⌘, ⌃ or ⌥ — a bare or shift-only key would hijack normal typing.
-    public var isValid: Bool { carbonModifiers & UInt32(cmdKey | controlKey | optionKey) != 0 }
+    /// Needs ⌘, ⌃ or ⌥ — a bare or shift-only key would hijack normal typing — and may not be
+    /// ⌘ alone (⌘V, ⌘C, ⌘Q, ⌘Tab… belong to every app and the system).
+    public var isValid: Bool {
+        carbonModifiers & UInt32(cmdKey | controlKey | optionKey) != 0 && carbonModifiers != UInt32(cmdKey)
+    }
 
     public var display: String {
         var s = ""
