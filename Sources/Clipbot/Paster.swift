@@ -18,8 +18,8 @@ final class Paster {
         guard let payload = try? history.payload(for: entry.id) else { NSSound.beep(); return }
         ClipWriter.write(payload, to: .general)
         watcher.noteOwnWrite()
-        try? history.moveToTop(entry.id)
         sendPaste(to: app)
+        try? history.moveToTop(entry.id) // index write after the paste is on its way
     }
 
     func paste(snippet: Snippet, into app: NSRunningApplication?) {
@@ -72,12 +72,10 @@ final class Paster {
     private func explainAccessibilityOnce() {
         guard !prefs.hasShownAccessibilityHelp else { return }
         prefs.hasShownAccessibilityHelp = true
-        let a = NSAlert()
-        a.messageText = "Copied — but Clipbot can't paste for you yet"
-        a.informativeText = "To paste automatically, allow Clipbot in System Settings → Privacy & Security → Accessibility. Until then, press ⌘V yourself."
-        a.addButton(withTitle: "Open Settings")
-        a.addButton(withTitle: "Not Now")
-        NSApp.activate()
-        if a.runModal() == .alertFirstButtonReturn { Permissions.openAccessibilitySettings() }
+        if Alert.run("Copied — but Clipbot can't paste for you yet",
+                     "To paste automatically, allow Clipbot in System Settings → Privacy & Security → Accessibility. Until then, press ⌘V yourself.",
+                     buttons: ["Open Settings", "Not Now"]) {
+            Permissions.openAccessibilitySettings()
+        }
     }
 }

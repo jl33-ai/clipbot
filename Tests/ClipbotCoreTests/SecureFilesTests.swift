@@ -1,12 +1,7 @@
 import XCTest
 @testable import ClipbotCore
 
-final class SecureFilesTests: XCTestCase {
-    var dir: URL!
-    override func setUpWithError() throws {
-        dir = FileManager.default.temporaryDirectory.appendingPathComponent("clipbot-tests-\(UUID().uuidString)")
-    }
-    override func tearDownWithError() throws { try? FileManager.default.removeItem(at: dir) }
+final class SecureFilesTests: TempDirTestCase {
 
     func perms(_ url: URL) throws -> Int {
         (try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as! NSNumber).intValue

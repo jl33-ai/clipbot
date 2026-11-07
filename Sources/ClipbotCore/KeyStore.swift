@@ -71,10 +71,7 @@ public final class KeychainKeyStore: KeyProviding, @unchecked Sendable {
     }
 
     public func retireKey(_ account: String) throws {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyyMMdd-HHmmss"
-        let update: [String: Any] = [kSecAttrAccount as String: "\(account).unreadable-\(f.string(from: Date()))"]
+        let update: [String: Any] = [kSecAttrAccount as String: "\(account).unreadable-\(SecureFiles.timestamp(Date(), "yyyyMMdd-HHmmss"))"]
         let status = SecItemUpdate(base(account) as CFDictionary, update as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
     }
@@ -124,22 +121,5 @@ public final class KeychainKeyStore: KeyProviding, @unchecked Sendable {
     public func deleteKey(_ account: String) throws {
         let status = SecItemDelete(base(account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
-    }
-}
-
-/// For tests only.
-public final class InMemoryKeyStore: KeyProviding, @unchecked Sendable {
-    private var keys: [String: SymmetricKey] = [:]
-    private let lock = NSLock()
-    public init() {}
-    public func existingKey(_ account: String) throws -> SymmetricKey? { lock.withLock { keys[account] } }
-    public func createKey(_ account: String) throws -> SymmetricKey {
-        let k = SymmetricKey(size: .bits256)
-        lock.withLock { keys[account] = k }
-        return k
-    }
-    public func deleteKey(_ account: String) throws { _ = lock.withLock { keys.removeValue(forKey: account) } }
-    public func retireKey(_ account: String) throws {
-        lock.withLock { if let k = keys.removeValue(forKey: account) { keys["\(account).unreadable"] = k } }
     }
 }

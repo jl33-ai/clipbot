@@ -4,13 +4,15 @@ import ClipbotCore
 
 /// System-wide hotkeys via Carbon `RegisterEventHotKey` (no Accessibility needed, no dependencies).
 @MainActor
-final class HotKeys {
+final class HotKeys: ObservableObject {
     static let shared = HotKeys()
 
     private struct Binding { let shortcut: Shortcut; let action: () -> Void; var ref: EventHotKeyRef? }
     private var bindings: [UInt32: Binding] = [:]
     private var handler: EventHandlerRef?
     private var suspended = false
+    /// Ids whose combination couldn't be registered (taken by another app or another shortcut).
+    @Published private(set) var failed: Set<UInt32> = []
     private let signature: OSType = 0x434C_4250 // 'CLBP'
 
     private init() {
@@ -32,12 +34,14 @@ final class HotKeys {
         var b = Binding(shortcut: shortcut, action: action, ref: nil)
         let ok = suspended || install(&b, id: id)
         bindings[id] = b
+        if ok { failed.remove(id) } else { failed.insert(id) }
         return ok
     }
 
     func unregister(_ id: UInt32) {
         if let ref = bindings[id]?.ref { UnregisterEventHotKey(ref) }
         bindings[id] = nil
+        failed.remove(id)
     }
 
     /// While the Settings recorder is listening, hotkeys must not fire.

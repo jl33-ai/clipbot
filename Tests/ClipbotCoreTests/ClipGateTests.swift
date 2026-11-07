@@ -4,14 +4,16 @@ import XCTest
 @testable import ClipbotCore
 
 /// The whole record-or-drop decision for one pasteboard change.
-final class ClipGateTests: XCTestCase {
-    var pb: NSPasteboard!
+final class ClipGateTests: PasteboardTestCase {
     let filter = SecretFilter(ignoredBundleIDs: SecretFilter.defaultIgnoredBundleIDs)
-    override func setUp() { pb = NSPasteboard(name: .init("clipbot-test-\(UUID().uuidString)")); pb.clearContents() }
-    override func tearDown() { pb.releaseGlobally() }
 
-    func gate(sources: Set<String> = ["com.apple.TextEdit"]) -> ClipGate.Result {
-        ClipGate.evaluate(items: pb.pasteboardItems ?? [], sourceBundleIDs: sources, filter: filter)
+    func gate(sources: Set<String> = ["com.apple.TextEdit"], secureInput: Bool = false) -> ClipGate.Result {
+        ClipGate.evaluate(items: pb.pasteboardItems ?? [], secureInput: secureInput, sourceBundleIDs: sources, filter: filter)
+    }
+
+    func testSecureInputDropsBeforeAnythingIsRead() {
+        pb.setString("typed into a password field", forType: .string)
+        XCTAssertEqual(gate(secureInput: true), .dropped(.secureInput))
     }
 
     func testPlainCopyIsRecorded() {
@@ -36,8 +38,7 @@ final class ClipGateTests: XCTestCase {
 
     func testSecretInRTFOnlyClipIsDropped() throws {
         let key = "sk-" + String(repeating: "aB3", count: 14)
-        let rtf = try NSAttributedString(string: key).data(from: NSRange(location: 0, length: key.utf16.count),
-                                                          documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+        let rtf = try rtfData(key)
         pb.setData(rtf, forType: .rtf)
         XCTAssertEqual(gate(), .dropped(.secretPattern))
     }
@@ -93,10 +94,7 @@ final class LockedKeyStore: KeyProviding, @unchecked Sendable {
     func retireKey(_ a: String) throws {}
 }
 
-final class KeyRecoveryTests: XCTestCase {
-    var dir: URL!
-    override func setUp() { dir = makeTempDir() }
-    override func tearDown() { try? FileManager.default.removeItem(at: dir) }
+final class KeyRecoveryTests: TempDirTestCase {
 
     func testUnwrappableHistoryKeyQuarantinesAndRecovers() throws {
         let keys = UnusableKeyStore()
@@ -155,10 +153,7 @@ final class KeyRecoveryTests: XCTestCase {
     }
 }
 
-final class HardeningTests: XCTestCase {
-    var dir: URL!
-    override func setUp() { dir = makeTempDir() }
-    override func tearDown() { try? FileManager.default.removeItem(at: dir) }
+final class HardeningTests: TempDirTestCase {
 
     func testSwappedClipFilesDoNotDecryptAsEachOther() throws {
         let keys = InMemoryKeyStore()
@@ -182,28 +177,30 @@ final class HardeningTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
     }
 
+    /// A file sealed without the snippets context (an old format, or a file planted from elsewhere)
+    /// is never opened: it's quarantined like any unreadable data.
     @MainActor
-    func testLegacySnippetFileWithoutAADIsMigrated() throws {
+    func testUnboundSnippetFileIsQuarantinedNotOpened() throws {
         let keys = InMemoryKeyStore()
         let key = try keys.createKey(SnippetStore.keyAccount)
         try SecureFiles.ensureDirectory(dir)
-        let legacy = try Sealer(key: key).seal(JSONEncoder().encode([SnippetFolder(title: "old")]))
-        try legacy.write(to: dir.appendingPathComponent("snippets.bin"))
-        XCTAssertEqual(try SnippetStore(directory: dir, keys: keys).folders.map(\.title), ["old"])
-        let migrated = try Data(contentsOf: dir.appendingPathComponent("snippets.bin"))
-        XCTAssertThrowsError(try Sealer(key: key).open(migrated), "re-saved with AAD")
+        let unbound = try XCTUnwrap(AES.GCM.seal(JSONEncoder().encode([SnippetFolder(title: "old")]), using: key).combined)
+        try unbound.write(to: dir.appendingPathComponent("snippets.bin"))
+        let s = try SnippetStore(directory: dir, keys: keys)
+        XCTAssertTrue(s.folders.isEmpty)
+        XCTAssertTrue(s.recoveredFromMissingKey)
     }
 
     func testPreviewStripsBidiAndControlCharacters() {
-        XCTAssertEqual(MenuModel.previewText("abc\u{202E}gpj.exe"), "abcgpj.exe")
-        XCTAssertEqual(MenuModel.previewText("a\u{0000}b\u{200B}c\u{2066}d"), "abcd")
-        XCTAssertEqual(MenuModel.previewText("👨‍👩‍👧 family"), "👨‍👩‍👧 family", "ZWJ inside emoji sequences is kept")
+        XCTAssertEqual(Preview.text("abc\u{202E}gpj.exe"), "abcgpj.exe")
+        XCTAssertEqual(Preview.text("a\u{0000}b\u{200B}c\u{2066}d"), "abcd")
+        XCTAssertEqual(Preview.text("👨‍👩‍👧 family"), "👨‍👩‍👧 family", "ZWJ inside emoji sequences is kept")
     }
 
     func testPreviewOfHugeTextIsCheap() {
         let huge = String(repeating: "word ", count: 2_000_000)
         let t0 = Date()
-        XCTAssertEqual(MenuModel.previewText(huge).count, 61)
+        XCTAssertEqual(Preview.text(huge).count, 61)
         XCTAssertLessThan(Date().timeIntervalSince(t0), 0.05)
     }
 

@@ -1,8 +1,8 @@
 import AppKit
 
 /// The complete record-or-drop decision for one pasteboard change, in the order that keeps secrets
-/// from ever being read: marker types and source apps (metadata) first, then data, then patterns.
-/// Secure-input and changeCount checks happen in the app before this is called.
+/// from ever being read: secure input, marker types and source apps (all metadata) first, then
+/// data, then secret patterns over every text form.
 public enum ClipGate {
     public enum Result: Equatable, Sendable {
         case record(CapturedClip)
@@ -10,12 +10,16 @@ public enum ClipGate {
         case skipped
     }
 
-    public static func evaluate(items: [NSPasteboardItem], sourceBundleIDs: Set<String>, filter: SecretFilter) -> Result {
+    /// - Parameters:
+    ///   - secureInput: whether secure keyboard input was on (a password field had focus).
+    ///   - sourceBundleIDs: every app that was frontmost since the previous change.
+    public static func evaluate(items: [NSPasteboardItem], secureInput: Bool, sourceBundleIDs: Set<String>,
+                                filter: SecretFilter) -> Result {
+        if secureInput { return .dropped(.secureInput) }
         let types = items.flatMap { $0.types.map(\.rawValue) }
         if let reason = filter.dropReason(types: types, sourceBundleIDs: sourceBundleIDs) { return .dropped(reason) }
         guard let clip = ClipCapture.capture(items: items) else { return .skipped }
-        // Every text form in the payload, whichever kind won (an image or PDF can carry text too).
-        if ClipCapture.allText(clip).contains(where: SecretFilter.looksLikeSecret) { return .dropped(.secretPattern) }
+        if clip.texts.contains(where: SecretFilter.looksLikeSecret) { return .dropped(.secretPattern) }
         return .record(clip)
     }
 }

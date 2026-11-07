@@ -17,8 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var bag: Set<AnyCancellable> = []
     private var statusItem: NSStatusItem?
 
-    private enum HotKeyID: UInt32, CaseIterable { case main = 1, history, snippets }
-
     func applicationDidFinishLaunching(_ note: Notification) {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Clipbot", isDirectory: true)
@@ -33,10 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         watcher = PasteboardWatcher(store: history) { [prefs] in prefs.filter }
         paster = Paster(history: history, watcher: watcher, prefs: prefs)
-        menu = MenuController(history: history, snippets: snippets, paster: paster)
-        menu.onClearHistory = { [weak self] in self?.confirmClearHistory() }
-        menu.onEditSnippets = { [weak self] in self?.showSnippetEditor() }
-        menu.onSettings = { [weak self] in self?.showSettings() }
+        menu = MenuController(history: history, snippets: snippets, paster: paster, commands: .init(
+            clearHistory: { [weak self] in self?.confirmClearHistory() },
+            editSnippets: { [weak self] in self?.showSnippetEditor() },
+            settings: { [weak self] in self?.showSettings() }))
         watcher.onSecureInputStuck = { [weak self] holder in self?.warnSecureInput(holder) }
         watcher.start()
         installMainMenu()
@@ -45,12 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] show in self?.setMenuBarIcon(show) }
             .store(in: &bag)
 
-        registerHotKeys()
-        Publishers.Merge3(prefs.$mainShortcut.map { _ in () }, prefs.$historyShortcut.map { _ in () },
-                          prefs.$snippetsShortcut.map { _ in () })
-            .dropFirst(3)
+        prefs.$shortcuts
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.registerHotKeys() }
+            .sink { [weak self] in self?.registerHotKeys($0) }
             .store(in: &bag)
 
         configureLoginItemOnFirstLaunch()
@@ -69,14 +65,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Hotkeys
 
-    private func registerHotKeys() {
-        let h = HotKeys.shared
-        for id in HotKeyID.allCases { h.unregister(id.rawValue) }
-        var conflicts: Set<String> = []
-        if !h.register(prefs.mainShortcut, id: HotKeyID.main.rawValue, action: { [weak self] in self?.menu.show(.all) }) { conflicts.insert("main") }
-        if !h.register(prefs.historyShortcut, id: HotKeyID.history.rawValue, action: { [weak self] in self?.menu.show(.history) }) { conflicts.insert("history") }
-        if !h.register(prefs.snippetsShortcut, id: HotKeyID.snippets.rawValue, action: { [weak self] in self?.menu.show(.snippets) }) { conflicts.insert("snippets") }
-        if prefs.shortcutConflicts != conflicts { prefs.shortcutConflicts = conflicts }
+    private func registerHotKeys(_ shortcuts: [ShortcutSlot: Shortcut]) {
+        // Unregister all first so swapping two shortcuts doesn't collide with itself.
+        for slot in ShortcutSlot.allCases { HotKeys.shared.unregister(slot.id) }
+        for slot in ShortcutSlot.allCases {
+            HotKeys.shared.register(shortcuts[slot] ?? slot.defaultValue, id: slot.id) { [weak self] in self?.menu.show(slot.menuMode) }
+        }
     }
 
     // MARK: Menu bar icon
@@ -164,24 +158,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func warnSecureInput(_ holder: String?) {
-        let a = NSAlert()
-        a.messageText = "Clipbot isn't recording copies right now"
-        a.informativeText = "Secure keyboard input is on\(holder.map { " (held by \($0))" } ?? ""), so Clipbot skips everything you copy — that's how it keeps passwords out. This normally lasts only while a password field is focused. If it keeps happening, the app above may have \"Secure Keyboard Entry\" turned on."
-        NSApp.activate()
-        a.runModal()
+        Alert.run("Clipbot isn't recording copies right now",
+                  "Secure keyboard input is on\(holder.map { " (held by \($0))" } ?? ""), so Clipbot skips everything you copy — that's how it keeps passwords out. This normally lasts only while a password field is focused. If it keeps happening, the app above may have \"Secure Keyboard Entry\" turned on.")
     }
 
     // MARK: Actions & alerts
 
     private func confirmClearHistory() {
-        let a = NSAlert()
-        a.messageText = "Clear all clipboard history?"
-        a.informativeText = "This permanently erases all \(history.entries.count) clips and replaces the encryption key, so they can't be recovered. Snippets are kept."
-        a.addButton(withTitle: "Clear History")
-        a.addButton(withTitle: "Cancel")
-        a.buttons.first?.hasDestructiveAction = true
-        NSApp.activate()
-        guard a.runModal() == .alertFirstButtonReturn else { return }
+        guard Alert.run("Clear all clipboard history?",
+                        "This permanently erases all \(history.entries.count) clips and replaces the encryption key, so they can't be recovered. Snippets are kept.",
+                        buttons: ["Clear History", "Cancel"], destructive: true) else { return }
         do { try history.clear() } catch { fail("Couldn't clear history", error, fatal: false) }
     }
 
@@ -192,33 +178,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func warnAboutRecoveredStores() {
-        var what: [String] = []
-        if history.recoveredFromMissingKey { what.append("clipboard history") }
-        if snippets.recoveredFromMissingKey { what.append("snippets") }
+        let what = [history.recoveredFromMissingKey ? "clipboard history" : nil,
+                    snippets.recoveredFromMissingKey ? "snippets" : nil].compactMap { $0 }
         guard !what.isEmpty else { return }
-        let a = NSAlert()
-        a.messageText = "Clipbot couldn't unlock your saved \(what.joined(separator: " and "))"
-        a.informativeText = "Its encryption key is missing or the data is damaged — this happens after moving to a new Mac or resetting the Keychain. Nothing was deleted: the old encrypted files were moved into an \"Unreadable\" folder in Clipbot's storage, and Clipbot has started fresh. Use Edit Snippets → Import to restore snippets from an export."
-        NSApp.activate()
-        a.runModal()
+        Alert.run("Clipbot couldn't unlock your saved \(what.joined(separator: " and "))",
+                  "Its encryption key is missing or the data is damaged — this happens after moving to a new Mac or resetting the Keychain. Nothing was deleted: the old encrypted files were moved into an \"Unreadable\" folder in Clipbot's storage and the old key was set aside. Clipbot has started fresh. Use Edit Snippets → Import to restore snippets from an export.")
     }
 
     private func warnPasteboardDenied() {
-        let a = NSAlert()
-        a.messageText = "Clipbot isn't allowed to read the clipboard"
-        a.informativeText = "Clipboard history stays empty until you allow Clipbot to paste from other apps in System Settings → Privacy & Security."
-        a.addButton(withTitle: "Open Settings")
-        a.addButton(withTitle: "Later")
-        NSApp.activate()
-        if a.runModal() == .alertFirstButtonReturn { Permissions.openPrivacySettings() }
+        if Alert.run("Clipbot isn't allowed to read the clipboard",
+                     "Clipboard history stays empty until you allow Clipbot to paste from other apps in System Settings → Privacy & Security.",
+                     buttons: ["Open Settings", "Later"]) {
+            Permissions.openPrivacySettings()
+        }
     }
 
     private func fail(_ title: String, _ error: Error, fatal: Bool = true) {
-        let a = NSAlert()
-        a.messageText = title
-        a.informativeText = String(describing: error)
-        NSApp.activate()
-        a.runModal()
+        Alert.run(title, String(describing: error))
         if fatal { NSApp.terminate(nil) }
     }
 }

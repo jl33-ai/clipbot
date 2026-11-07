@@ -6,9 +6,9 @@ import Foundation
 final class Preferences: ObservableObject {
     private let d = UserDefaults.standard
 
-    @Published var mainShortcut: Shortcut { didSet { save(mainShortcut, "shortcut.main") } }
-    @Published var historyShortcut: Shortcut { didSet { save(historyShortcut, "shortcut.history") } }
-    @Published var snippetsShortcut: Shortcut { didSet { save(snippetsShortcut, "shortcut.snippets") } }
+    @Published var shortcuts: [ShortcutSlot: Shortcut] {
+        didSet { for (slot, s) in shortcuts where oldValue[slot] != s { d.set(try? JSONEncoder().encode(s), forKey: slot.defaultsKey) } }
+    }
     @Published var ignoredBundleIDs: [String] { didSet { d.set(ignoredBundleIDs, forKey: "ignoredBundleIDs") } }
     @Published var showMenuBarIcon: Bool { didSet { d.set(showMenuBarIcon, forKey: "showMenuBarIcon") } }
 
@@ -20,8 +20,6 @@ final class Preferences: ObservableObject {
         get { d.bool(forKey: "didPromptAccessibility") }
         set { d.set(newValue, forKey: "didPromptAccessibility") }
     }
-    /// Shortcuts that failed to register (taken by another app or each other). Not persisted.
-    @Published var shortcutConflicts: Set<String> = []
     var hasShownAccessibilityHelp: Bool {
         get { d.bool(forKey: "didShowAccessibilityHelp") }
         set { d.set(newValue, forKey: "didShowAccessibilityHelp") }
@@ -29,19 +27,13 @@ final class Preferences: ObservableObject {
 
     init() {
         let d = UserDefaults.standard
-        func load(_ key: String, _ fallback: Shortcut) -> Shortcut {
-            d.data(forKey: key).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } ?? fallback
-        }
-        mainShortcut = load("shortcut.main", .mainDefault)
-        historyShortcut = load("shortcut.history", .historyDefault)
-        snippetsShortcut = load("shortcut.snippets", .snippetsDefault)
+        shortcuts = Dictionary(uniqueKeysWithValues: ShortcutSlot.allCases.map { slot in
+            (slot, d.data(forKey: slot.defaultsKey).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } ?? slot.defaultValue)
+        })
         ignoredBundleIDs = d.stringArray(forKey: "ignoredBundleIDs") ?? SecretFilter.defaultIgnoredBundleIDs.sorted()
         showMenuBarIcon = d.object(forKey: "showMenuBarIcon") as? Bool ?? true
     }
 
     var filter: SecretFilter { SecretFilter(ignoredBundleIDs: Set(ignoredBundleIDs)) }
 
-    private func save(_ s: Shortcut, _ key: String) {
-        d.set(try? JSONEncoder().encode(s), forKey: key)
-    }
 }

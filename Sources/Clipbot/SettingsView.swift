@@ -6,12 +6,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var prefs: Preferences
+    @ObservedObject private var hotKeys = HotKeys.shared
     let onClearHistory: () -> Void
     let onEditSnippets: () -> Void
     let onRecording: (Bool) -> Void
 
     @State private var loginStatus = SMAppService.mainApp.status
-    @State private var secureInput = PasteboardWatcher.secureInputOn
+    @State private var secureInput = SecureInput.isOn
     @State private var axTrusted = Permissions.accessibilityTrusted
     @State private var pbAccess = Permissions.pasteboardAccess
     @State private var selectedIgnored: String?
@@ -20,9 +21,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Shortcuts") {
-                shortcutRow("History & snippets", $prefs.mainShortcut, .mainDefault, "main")
-                shortcutRow("History only", $prefs.historyShortcut, .historyDefault, "history")
-                shortcutRow("Snippets only", $prefs.snippetsShortcut, .snippetsDefault, "snippets")
+                ForEach(ShortcutSlot.allCases) { slot in shortcutRow(slot) }
             }
 
             Section("General") {
@@ -89,16 +88,18 @@ struct SettingsView: View {
             axTrusted = Permissions.accessibilityTrusted
             pbAccess = Permissions.pasteboardAccess
             loginStatus = SMAppService.mainApp.status
-            secureInput = PasteboardWatcher.secureInputOn
+            secureInput = SecureInput.isOn
         }
     }
 
-    private func shortcutRow(_ title: String, _ binding: Binding<Shortcut>, _ def: Shortcut, _ key: String) -> some View {
+    private func shortcutRow(_ slot: ShortcutSlot) -> some View {
         LabeledContent {
-            ShortcutRecorder(shortcut: binding, defaultValue: def, onRecording: onRecording)
+            ShortcutRecorder(shortcut: Binding(get: { prefs.shortcuts[slot] ?? slot.defaultValue },
+                                               set: { prefs.shortcuts[slot] = $0 }),
+                             defaultValue: slot.defaultValue, onRecording: onRecording)
         } label: {
-            Text(title)
-            if prefs.shortcutConflicts.contains(key) {
+            Text(slot.title)
+            if hotKeys.failed.contains(slot.id) {
                 Text("Already in use by another app or shortcut").foregroundStyle(.red)
             }
         }

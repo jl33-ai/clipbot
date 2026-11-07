@@ -157,12 +157,7 @@ struct SnippetEditorView: View {
     }
 
     private func confirm(_ text: String) -> Bool {
-        let a = NSAlert()
-        a.messageText = text
-        a.addButton(withTitle: "Delete")
-        a.addButton(withTitle: "Cancel")
-        a.buttons.first?.hasDestructiveAction = true
-        return a.runModal() == .alertFirstButtonReturn
+        Alert.run(text, buttons: ["Delete", "Cancel"], destructive: true)
     }
 
     private func importXML() {
@@ -181,12 +176,9 @@ struct SnippetEditorView: View {
     }
 
     private func exportXML() {
-        let a = NSAlert()
-        a.messageText = "Export snippets as an unencrypted file?"
-        a.informativeText = "The exported file is plain text, so anyone who can read it can see your snippets. Don't save it in a folder that syncs to iCloud or another cloud service. Clipboard history is never exported."
-        a.addButton(withTitle: "Export…")
-        a.addButton(withTitle: "Cancel")
-        guard a.runModal() == .alertFirstButtonReturn else { return }
+        guard Alert.run("Export snippets as an unencrypted file?",
+                        "The exported file is plain text, so anyone who can read it can see your snippets. Don't save it in a folder that syncs to iCloud or another cloud service. Clipboard history is never exported.",
+                        buttons: ["Export…", "Cancel"]) else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "Clipbot Snippets.xml"
         // Downloads isn't synced by iCloud Desktop & Documents.

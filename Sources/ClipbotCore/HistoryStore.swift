@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Encrypted clipboard history: `index.bin` (sealed JSON of entries, newest first) plus one sealed
@@ -33,38 +32,17 @@ public final class HistoryStore {
         let fm = FileManager.default
         let hasData = fm.fileExists(atPath: directory.appendingPathComponent(Self.indexName).path)
             || !((try? fm.contentsOfDirectory(atPath: directory.appendingPathComponent(Self.clipsName).path)) ?? []).isEmpty
-
-        if let key = try Self.usableKey(keys, Self.keyAccount) {
-            sealer = Sealer(key: key)
-            if hasData {
-                do {
-                    entries = try loadIndex()
-                } catch {
-                    try Self.quarantine(directory)
-                    recoveredFromMissingKey = true
-                }
-            }
-        } else {
-            if hasData {
-                try Self.quarantine(directory)
-                recoveredFromMissingKey = true
-            }
-            sealer = Sealer(key: try keys.createKey(Self.keyAccount))
+        let opened = try StoreBootstrap.open(keys: keys, account: Self.keyAccount, directory: directory,
+                                             files: [Self.indexName, Self.clipsName], hasData: hasData) { sealer in
+            try JSONDecoder().decode([ClipEntry].self,
+                                     from: sealer.open(Data(contentsOf: directory.appendingPathComponent(Self.indexName)), context: Self.indexContext))
         }
+        sealer = opened.sealer
+        entries = opened.value ?? []
+        recoveredFromMissingKey = opened.recovered
         try SecureFiles.ensureDirectory(clipsURL)
         try dropEntriesWithMissingFiles()
         sweepOrphans()
-    }
-
-    /// A key that exists but can't be unwrapped is retired (renamed, kept) and counts as missing;
-    /// Keychain errors (locked, denied) still throw so nothing is quarantined on a transient failure.
-    static func usableKey(_ keys: KeyProviding, _ account: String) throws -> SymmetricKey? {
-        do {
-            return try keys.existingKey(account)
-        } catch is KeyUnusableError {
-            try keys.retireKey(account)
-            return nil
-        }
     }
 
     // MARK: Public API
@@ -121,10 +99,6 @@ public final class HistoryStore {
         try saveIndex()
     }
 
-    private func loadIndex() throws -> [ClipEntry] {
-        try JSONDecoder().decode([ClipEntry].self, from: sealer.open(Data(contentsOf: indexURL), context: Self.indexContext))
-    }
-
     private func saveIndex() throws {
         try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(entries), context: Self.indexContext), to: indexURL)
     }
@@ -154,7 +128,4 @@ public final class HistoryStore {
         if entries.count != before { try saveIndex() }
     }
 
-    private static func quarantine(_ directory: URL) throws {
-        try SecureFiles.quarantine([indexName, clipsName], in: directory)
-    }
 }

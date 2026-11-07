@@ -31,15 +31,20 @@ public enum SecureFiles {
         }
     }
 
+    /// Fixed-format UTC timestamp for file and Keychain names.
+    static func timestamp(_ date: Date, _ format: String) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = format
+        return f.string(from: date)
+    }
+
     /// Moves the named entries of `dir` into a new `Unreadable-<yyyy-MM-dd>[-n]/` folder. Never deletes.
     @discardableResult
     public static func quarantine(_ names: [String], in dir: URL, date: Date = Date()) throws -> URL {
         let fm = FileManager.default
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
-        let stem = "Unreadable-\(f.string(from: date))"
+        let stem = "Unreadable-\(timestamp(date, "yyyy-MM-dd"))"
         var target = dir.appendingPathComponent(stem)
         var n = 2
         while fm.fileExists(atPath: target.path) {

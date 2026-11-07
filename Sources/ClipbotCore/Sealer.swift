@@ -12,20 +12,17 @@ public struct Sealer: Sendable {
     }
 
     /// nonce ‖ ciphertext ‖ tag (CryptoKit combined representation).
-    /// `context` is authenticated (AAD), binding the ciphertext to its role/location.
-    public func seal(_ data: Data, context: String? = nil) throws -> Data {
-        let box = try context.map { try AES.GCM.seal(data, using: key, authenticating: Data($0.utf8)) }
-            ?? AES.GCM.seal(data, using: key)
-        guard let combined = box.combined else {
+    /// `context` is authenticated (AAD), binding the ciphertext to its role and location, so a
+    /// file can't be swapped in for another. Required: there is no unbound mode.
+    public func seal(_ data: Data, context: String) throws -> Data {
+        guard let combined = try AES.GCM.seal(data, using: key, authenticating: Data(context.utf8)).combined else {
             throw CocoaError(.coderInvalidValue)
         }
         return combined
     }
 
-    public func open(_ data: Data, context: String? = nil) throws -> Data {
-        let box = try AES.GCM.SealedBox(combined: data)
-        if let context { return try AES.GCM.open(box, using: key, authenticating: Data(context.utf8)) }
-        return try AES.GCM.open(box, using: key)
+    public func open(_ data: Data, context: String) throws -> Data {
+        try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: key, authenticating: Data(context.utf8))
     }
 
     /// HMAC-SHA256 under a key derived from the sealing key; never a plain content hash.

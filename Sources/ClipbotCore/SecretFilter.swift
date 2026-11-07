@@ -3,9 +3,9 @@ import Foundation
 /// Decides whether a pasteboard change must be dropped before anything is stored.
 ///
 /// Order matters: marker types and the ignored-app list are checked from pasteboard
-/// *metadata only* (`shouldDropBeforeRead`), so secret data is never read. Text that
+/// *metadata only* (`dropReason`), so secret data is never read. Text that
 /// passes is then checked against well-known secret formats (`looksLikeSecret`).
-public struct SecretFilter: Sendable {
+public struct SecretFilter: @unchecked Sendable {
     /// nspasteboard.org conventions + 1Password's legacy marker.
     public static let markerTypes: Set<String> = [
         "org.nspasteboard.ConcealedType",
@@ -27,7 +27,7 @@ public struct SecretFilter: Sendable {
         self.ignoredBundleIDs = ignoredBundleIDs
     }
 
-    public enum Reason: Equatable, Sendable { case marker, ignoredApp, secretPattern }
+    public enum Reason: Equatable, Sendable { case secureInput, marker, ignoredApp, secretPattern }
 
     /// Metadata-only check. `sourceBundleIDs` = every app that was frontmost since the last change.
     public func dropReason(types: [String], sourceBundleIDs: Set<String>) -> Reason? {
@@ -36,31 +36,31 @@ public struct SecretFilter: Sendable {
         return nil
     }
 
-    public func shouldDropBeforeRead(types: [String], frontmostBundleID: String?) -> Bool {
-        dropReason(types: types, sourceBundleIDs: frontmostBundleID.map { [$0] } ?? []) != nil
-    }
-
     /// Token formats, matched against every token of the text (split on whitespace and the
     /// punctuation that surrounds keys in .env files, shell exports, JSON and prose).
-    private static let tokenPatterns: [String] = [
+    private static let tokenPatterns: [NSRegularExpression] = [
         #"^sk-[A-Za-z0-9_-]{32,}$"#,                 // OpenAI / Anthropic style
         #"^(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}$"#, // GitHub tokens
         #"^github_pat_[A-Za-z0-9_]{50,}$"#,           // GitHub fine-grained PAT
         #"^(AKIA|ASIA)[A-Z0-9]{16}$"#,                // AWS access key ID
         #"^xox[abposr]-[A-Za-z0-9-]{10,}$"#,          // Slack
         #"^(sk|rk)_live_[A-Za-z0-9]{24,}$"#,          // Stripe live secret / restricted
-    ]
-    private static let pemPattern = #"-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"#
+    ].map { try! NSRegularExpression(pattern: $0) }
+    private static let pemPattern = try! NSRegularExpression(pattern: #"-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"#)
     private static let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "=:\"'`,;()[]{}<>"))
     /// Clips longer than this are only checked for PEM blocks (keeps huge pastes cheap).
     private static let maxScannedLength = 200_000
 
     public static func looksLikeSecret(_ text: String) -> Bool {
-        if text.range(of: pemPattern, options: .regularExpression) != nil { return true }
+        if text.contains("PRIVATE KEY"), matches(pemPattern, text) { return true }
         guard text.utf16.count <= maxScannedLength else { return false }
         for token in text.components(separatedBy: separators) where token.count >= 20 {
-            if tokenPatterns.contains(where: { token.range(of: $0, options: .regularExpression) != nil }) { return true }
+            if tokenPatterns.contains(where: { matches($0, token) }) { return true }
         }
         return false
+    }
+
+    private static func matches(_ re: NSRegularExpression, _ s: String) -> Bool {
+        re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil
     }
 }

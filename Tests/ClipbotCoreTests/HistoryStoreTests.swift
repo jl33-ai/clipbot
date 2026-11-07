@@ -1,12 +1,9 @@
 import XCTest
 @testable import ClipbotCore
 
-final class HistoryStoreTests: XCTestCase {
-    var dir: URL!
+final class HistoryStoreTests: TempDirTestCase {
     var keys: InMemoryKeyStore!
-
-    override func setUp() { dir = makeTempDir(); keys = InMemoryKeyStore() }
-    override func tearDown() { try? FileManager.default.removeItem(at: dir) }
+    override func setUp() { super.setUp(); keys = InMemoryKeyStore() }
 
     func open(capacity: Int = 100) throws -> HistoryStore { try HistoryStore(directory: dir, keys: keys, capacity: capacity) }
     func add(_ s: HistoryStore, _ text: String) throws { try s.add(textPayload(text), kind: .text, preview: text, thumbnail: nil) }
@@ -62,7 +59,7 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertTrue(clipFiles().isEmpty)
         let newKey = try XCTUnwrap(try keys.existingKey("clip-key"))
         XCTAssertNotEqual(newKey.withUnsafeBytes { Data($0) }, oldKey)
-        XCTAssertThrowsError(try Sealer(key: newKey).open(oldIndex), "old ciphertext must be unreadable after clear")
+        XCTAssertThrowsError(try Sealer(key: newKey).open(oldIndex, context: "io.linus.clipbot/index/v1"), "old ciphertext must be unreadable after clear")
         XCTAssertTrue(try open().entries.isEmpty)
     }
 

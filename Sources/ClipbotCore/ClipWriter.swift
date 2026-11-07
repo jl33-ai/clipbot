@@ -3,7 +3,7 @@ import AppKit
 /// Every pasteboard write Clipbot makes goes through here, marked current-host-only so
 /// Universal Clipboard never syncs it to other devices.
 public enum ClipWriter {
-    public static let contentsOptions: NSPasteboard.ContentsOptions = .currentHostOnly
+    static let contentsOptions: NSPasteboard.ContentsOptions = .currentHostOnly
 
     public static func write(_ payload: ClipPayload, to pb: NSPasteboard) {
         let fileType = NSPasteboard.PasteboardType.fileURL.rawValue

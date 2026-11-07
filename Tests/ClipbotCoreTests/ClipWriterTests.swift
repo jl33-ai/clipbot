@@ -3,29 +3,26 @@ import Carbon.HIToolbox
 import XCTest
 @testable import ClipbotCore
 
-final class ClipWriterTests: XCTestCase {
-    var pb: NSPasteboard!
-    override func setUp() { pb = NSPasteboard(name: .init("clipbot-test-\(UUID().uuidString)")); pb.clearContents() }
-    override func tearDown() { pb.releaseGlobally() }
+final class ClipWriterTests: PasteboardTestCase {
 
     func testWritePayloadRoundTripsThroughCapture() throws {
         let item = NSPasteboardItem()
         item.setString("bold", forType: .string)
         item.setData(Data("{\\rtf1 bold}".utf8), forType: .rtf)
         pb.writeObjects([item])
-        let original = try XCTUnwrap(ClipCapture.capture(from: pb)).payload
+        let original = try XCTUnwrap(capture()).payload
         pb.clearContents()
         ClipWriter.write(original, to: pb)
-        XCTAssertEqual(ClipCapture.capture(from: pb)?.payload, original)
+        XCTAssertEqual(capture()?.payload, original)
     }
 
     func testMultipleFilesBecomeSeparateItems() throws {
         pb.writeObjects([URL(fileURLWithPath: "/tmp/a") as NSURL, URL(fileURLWithPath: "/tmp/b") as NSURL])
-        let original = try XCTUnwrap(ClipCapture.capture(from: pb)).payload
+        let original = try XCTUnwrap(capture()).payload
         pb.clearContents()
         ClipWriter.write(original, to: pb)
         XCTAssertEqual(pb.pasteboardItems?.count, 2)
-        XCTAssertEqual(ClipCapture.capture(from: pb)?.payload, original)
+        XCTAssertEqual(capture()?.payload, original)
     }
 
     func testWriteTextIsPlainOnly() {

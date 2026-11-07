@@ -7,26 +7,31 @@ final class SealerTests: XCTestCase {
     let data = Data("hello clipbot".utf8)
 
     func testRoundTrip() throws {
-        XCTAssertEqual(try sealer.open(try sealer.seal(data)), data)
+        XCTAssertEqual(try sealer.open(try sealer.seal(data, context: "t"), context: "t"), data)
     }
 
     func testTamperedCiphertextThrows() throws {
-        var box = try sealer.seal(data)
+        var box = try sealer.seal(data, context: "t")
         box[box.count / 2] ^= 0x01
-        XCTAssertThrowsError(try sealer.open(box))
+        XCTAssertThrowsError(try sealer.open(box, context: "t"))
     }
 
     func testWrongKeyThrows() throws {
-        let box = try sealer.seal(data)
-        XCTAssertThrowsError(try Sealer(key: SymmetricKey(size: .bits256)).open(box))
+        let box = try sealer.seal(data, context: "t")
+        XCTAssertThrowsError(try Sealer(key: SymmetricKey(size: .bits256)).open(box, context: "t"))
+    }
+
+    func testWrongContextThrows() throws {
+        let box = try sealer.seal(data, context: "clip/A")
+        XCTAssertThrowsError(try sealer.open(box, context: "clip/B"))
     }
 
     func testSealsAreRandomised() throws {
-        XCTAssertNotEqual(try sealer.seal(data), try sealer.seal(data))
+        XCTAssertNotEqual(try sealer.seal(data, context: "t"), try sealer.seal(data, context: "t"))
     }
 
     func testCiphertextDoesNotContainPlaintext() throws {
-        let box = try sealer.seal(data)
+        let box = try sealer.seal(data, context: "t")
         XCTAssertNil(box.range(of: data))
     }
 
