@@ -20,7 +20,18 @@ EXPECTED='{"com.apple.security.app-sandbox":true,"com.apple.security.files.user-
 [ "$(echo "$ENTS" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin),sort_keys=True,separators=(",",":")))')" = "$EXPECTED" ] \
   && pass "entitlements are exactly: sandbox + user-selected files" || fail "unexpected entitlements: $ENTS"
 
-for lib in "$BIN" "$CORE"; do
+HELPER="$APP/Contents/XPCServices/ClipReader.xpc"
+HELPER_BIN="$HELPER/Contents/MacOS/ClipReader"
+if [ -x "$HELPER_BIN" ]; then
+  pass "isolated clipboard reader embedded (ClipReader.xpc)"
+  codesign -dv "$HELPER" 2>&1 | grep -q 'flags=.*runtime' && pass "reader: hardened runtime on" || fail "reader: hardened runtime off"
+  HENTS=$(codesign -d --entitlements - --xml "$HELPER" 2>/dev/null | plutil -convert json -o - - 2>/dev/null | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin),sort_keys=True,separators=(",",":")))')
+  [ "$HENTS" = '{"com.apple.security.app-sandbox":true}' ] && pass "reader: entitlements are exactly: sandbox" || fail "reader: unexpected entitlements: $HENTS"
+else
+  fail "isolated clipboard reader missing: $HELPER_BIN"
+fi
+
+for lib in "$BIN" "$CORE" "$HELPER_BIN"; do
   name=$(basename "$lib")
   if otool -L "$lib" | grep -qiE 'CFNetwork|Network\.framework|libcurl|WebKit'; then fail "$name links a networking framework"; else pass "$name links no networking frameworks"; fi
   if nm -u "$lib" 2>/dev/null | grep -qE 'URLSession|NSURLConnection|nw_connection|nw_endpoint|_socket$|_connect$|CFSocket|CFStreamCreatePairWithSocket|_getaddrinfo'; then

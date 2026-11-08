@@ -27,7 +27,7 @@ public struct SecretFilter: @unchecked Sendable {
         self.ignoredBundleIDs = ignoredBundleIDs
     }
 
-    public enum Reason: Equatable, Sendable { case secureInput, marker, ignoredApp, secretPattern }
+    public enum Reason: String, Codable, Equatable, Sendable { case secureInput, marker, ignoredApp, secretPattern }
 
     /// Metadata-only check. `sourceBundleIDs` = every app that was frontmost since the last change.
     public func dropReason(types: [String], sourceBundleIDs: Set<String>) -> Reason? {

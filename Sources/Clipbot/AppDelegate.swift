@@ -49,13 +49,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] in self?.registerHotKeys($0) }
             .store(in: &bag)
 
-        configureLoginItem()
         warnAboutRecoveredStores()
         if Permissions.pasteboardAccess == .denied { warnPasteboardDenied() }
+        #if !DEBUG
+        // Debug builds are throwaway test copies: they never add a login item or ask for permissions.
+        configureLoginItem()
         if !Permissions.accessibilityTrusted, !prefs.hasPromptedAccessibility {
             prefs.hasPromptedAccessibility = true
             Permissions.requestAccessibility()
         }
+        #endif
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {

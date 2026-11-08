@@ -1,7 +1,7 @@
 import AppKit
 import ImageIO
 
-public struct CapturedClip: Sendable, Equatable {
+public struct CapturedClip: Codable, Sendable, Equatable {
     public let payload: ClipPayload
     public let kind: ClipKind
     public let preview: String

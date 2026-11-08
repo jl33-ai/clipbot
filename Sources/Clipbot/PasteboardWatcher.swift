@@ -1,9 +1,10 @@
 import AppKit
 import ClipbotCore
 
-/// Polls the general pasteboard (macOS has no change notification) and records allowed clips.
-/// Order: own-write check → ClipGate (secure input → metadata filter → read → secret patterns) →
-/// re-check changeCount (nothing changed mid-read) → store.
+/// Polls the general pasteboard's change count (macOS has no change notification) and hands each
+/// change to the isolated ClipReader helper, which reads and checks it. Dclip only ever sees the
+/// checked result: own-write check → helper (secure input → metadata filter → read → secret
+/// patterns → changeCount re-check) → store.
 @MainActor
 final class PasteboardWatcher {
     private let pb = NSPasteboard.general
@@ -14,6 +15,9 @@ final class PasteboardWatcher {
     /// Every app that was frontmost since the last processed change — the copy came from one of them.
     private var sources: Set<String> = []
     private var activationObserver: NSObjectProtocol?
+    private let reader = ReaderClient()
+    /// A read is in flight; later changes wait for it (the next tick picks up the newest one).
+    private var reading = false
     private var secureInputDrops = 0
     private var warnedSecureInput = false
 
@@ -49,19 +53,29 @@ final class PasteboardWatcher {
     }
 
     private func tick() {
+        guard !reading else { return }
         let count = pb.changeCount
         guard tracker.observe(count) else { return }
         if let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier { sources.insert(front) }
-        defer { resetSources() }
-
-        // One snapshot of the items: the types checked are the types read.
-        let items = pb.pasteboardItems ?? []
-        let result = ClipGate.evaluate(items: items, secureInput: SecureInput.isOn, sourceBundleIDs: sources, filter: filter())
-        noteSecureInput(result == .dropped(.secureInput))
-        guard pb.changeCount == count else {
-            Log.app.info("clip dropped: pasteboard changed during read")
-            return
+        let request = ReadRequest(changeCount: count, secureInput: SecureInput.isOn, sourceBundleIDs: Array(sources),
+                                  ignoredBundleIDs: Array(filter().ignoredBundleIDs))
+        resetSources()
+        reading = true
+        reader.read(request) { [weak self] outcome in
+            guard let self else { return }
+            reading = false
+            switch outcome {
+            case .failed(let why):
+                Log.app.error("clip dropped: reader \(why, privacy: .public)")
+            case .response(let r):
+                guard let result = r.result else { Log.app.info("clip dropped: pasteboard changed during read"); return }
+                handle(result)
+            }
         }
+    }
+
+    private func handle(_ result: ClipGate.Result) {
+        noteSecureInput(result == .dropped(.secureInput))
         switch result {
         case .dropped(let reason):
             Log.app.info("clip dropped: \(String(describing: reason), privacy: .public)")

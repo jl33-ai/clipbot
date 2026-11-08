@@ -29,6 +29,7 @@ targets:
     sources: [Sources/Clipbot]
     dependencies:
       - target: ClipbotCore
+      - target: ClipReader
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot
@@ -43,6 +44,26 @@ targets:
           PRODUCT_NAME: Dclip Debug
         Release:
           # No get-task-allow: nothing may attach a debugger and read decrypted clips from memory.
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+  ClipReader:
+    type: xpc-service
+    platform: macOS
+    sources: [Sources/ClipReader]
+    dependencies:
+      - target: ClipbotCore
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot.ClipReader
+        PRODUCT_NAME: ClipReader
+        INFOPLIST_FILE: Config/ClipReader-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/ClipReader.entitlements
+        # ClipbotCore.framework lives in the app's Contents/Frameworks.
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @loader_path/../../../../Frameworks"
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot.debug.ClipReader
+        Release:
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
   ClipbotCoreTests:
     type: bundle.unit-test

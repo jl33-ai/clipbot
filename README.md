@@ -68,6 +68,12 @@ On first launch it adds itself to Login Items. Grant two permissions:
 - **Clear History** deletes every clip and replaces the key, so leftover bytes on disk can't
   be read with the current key. (An old Keychain backup *on this same Mac*, together with old
   disk snapshots, could in principle still open them.)
+- **Hostile copies can't freeze or crash it.** All clipboard data is read in a separate,
+  sandboxed helper process (`ClipReader.xpc`). That includes macOS's own RTF/PDF/image
+  converters, which run in whichever process asks for a converted format. The stress suite found
+  a 170-byte RTF that sends Apple's RTF parser into an infinite loop
+  (`Tests/Fixtures/rtf-tokenizer-hang.rtf`). With the helper, that copy is dropped: the helper's
+  watchdog ends it after 2 s, launchd starts a fresh one, and Dclip never stops responding.
 - **No network.** The App Sandbox has no network entitlement, so the OS blocks every
   connection. There's no analytics, crash reporting, update checks or third-party libraries. The popup's
   UI is adapted from [Maccy](https://github.com/p0deje/Maccy) (MIT, `docs/licenses/Maccy.txt`).

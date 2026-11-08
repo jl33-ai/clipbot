@@ -95,9 +95,13 @@ final class XMLStressTests: XCTestCase {
 // MARK: - Clipboard capture (untrusted data from any app)
 
 final class CaptureStressTests: PasteboardTestCase {
-    // .fileURL is left out: a malformed file URL written and read by the same test process stalls
-    // the pasteboard server's sandbox-extension lookup. Follow-up: reproduce across two processes.
-    let types: [NSPasteboard.PasteboardType] = [.rtf, .rtfd, .pdf, .tiff, .png, .string, .URL]
+    // Left out on purpose:
+    // - .rtf: some malformed RTF sends Apple's RTF tokenizer into an infinite loop
+    //   (Tests/Fixtures/rtf-tokenizer-hang.rtf). In the app this only ever runs inside the isolated
+    //   ClipReader helper, whose watchdog kills it; in a test process it would hang the suite.
+    // - .fileURL: a malformed file URL written and read by the same process stalls the pasteboard
+    //   server's sandbox-extension lookup.
+    let types: [NSPasteboard.PasteboardType] = [.rtfd, .pdf, .tiff, .png, .string, .URL]
 
     func seeds() throws -> [NSPasteboard.PasteboardType: Data] {
         let img = NSImage(size: NSSize(width: 40, height: 20), flipped: false) { r in NSColor.green.setFill(); r.fill(); return true }

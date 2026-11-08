@@ -221,6 +221,20 @@ Debug logging never includes clip content in any build.
 - Out of Clipbot's control (documented in README): turn on FileVault, and
   optionally disable Handoff to stop *other* apps' copies syncing.
 
+### 5. Isolated clipboard reading (added after stress testing)
+
+- Stress testing found a 170-byte RTF that hangs Apple's RTF tokenizer forever. macOS runs its
+  pasteboard type converters inside whichever process requests a converted type, so reading such a
+  copy froze the whole app.
+- All clipboard reads now happen in an embedded XPC service, `ClipReader`:
+  - It is sandboxed with no network access, and it only accepts connections from Dclip's own
+    signing team and bundle ids.
+  - It runs the full gate (secure input, markers, ignored apps, secret patterns, changeCount checks)
+    and returns a checked `ClipGate.Result`.
+  - A watchdog `_exit`s the helper if a read takes more than 2 s.
+- The main app never reads clipboard data. Its client has a 15 s backstop timeout (launchd can take
+  about 6–10 s to respawn the helper), and any failure drops only that one copy.
+
 ## Constraints
 
 - Linus runs macOS 27 (Xcode 27, Swift 6.4). Deployment target macOS 15 or

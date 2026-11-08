@@ -4,7 +4,7 @@ import AppKit
 /// from ever being read: secure input, marker types and source apps (all metadata) first, then
 /// data, then secret patterns over every text form.
 public enum ClipGate {
-    public enum Result: Equatable, Sendable {
+    public enum Result: Codable, Equatable, Sendable {
         case record(CapturedClip)
         case dropped(SecretFilter.Reason)
         case skipped
