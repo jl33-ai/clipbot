@@ -8,18 +8,21 @@ public enum Preview {
         var out = ""
         var count = 0
         var pendingSpace = false
-        for ch in s {
-            if ch.isWhitespace || ch.isNewline {
+        for raw in s {
+            if raw.isWhitespace || raw.isNewline {
                 pendingSpace = count > 0
                 continue
             }
-            if ch.unicodeScalars.allSatisfy({ isInvisible($0) }) { continue }
+            // Strip invisible scalars from inside each character too (they can attach to a
+            // visible one), keeping only the joiner that emoji sequences need.
+            let kept = raw.unicodeScalars.filter { $0 == "\u{200D}" || !isInvisible($0) }
+            guard kept.contains(where: { $0 != "\u{200D}" }) else { continue }
             if pendingSpace {
                 if count == limit { return out + "…" }
                 out.append(" "); count += 1; pendingSpace = false
             }
             if count == limit { return out + "…" }
-            out.append(ch); count += 1
+            out.unicodeScalars.append(contentsOf: kept); count += 1
         }
         return out
     }

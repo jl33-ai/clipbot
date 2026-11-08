@@ -66,6 +66,12 @@ final class ClipGateTests: PasteboardTestCase {
         XCTAssertEqual(gate(), .dropped(.secretPattern))
     }
 
+    func testRTFDOnlyCopyIsSkippedNotParsed() {
+        // Malformed RTFD must never reach AppKit's parser (it raises an uncatchable exception).
+        pb.setData(Data("not really rtfd".utf8), forType: .rtfd)
+        XCTAssertEqual(gate(), .skipped)
+    }
+
     func testEmptyIsSkipped() {
         pb.setString("  ", forType: .string)
         XCTAssertEqual(gate(), .skipped)

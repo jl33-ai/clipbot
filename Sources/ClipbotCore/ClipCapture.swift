@@ -47,11 +47,13 @@ public enum ClipCapture {
         let byType = Dictionary(reps.map { (NSPasteboard.PasteboardType($0.type), $0.data) }, uniquingKeysWith: { a, _ in a })
         let plain = byType[.string].flatMap { String(data: $0, encoding: .utf8) }
         let url = byType[.URL].flatMap { String(data: $0, encoding: .utf8) }
-        let rtfText = byType[.rtf].flatMap { NSAttributedString(rtf: $0, documentAttributes: nil)?.string }
-        let rtfdText = byType[.rtfd].flatMap { NSAttributedString(rtfd: $0, documentAttributes: nil)?.string }
-        let rich = rtfText ?? rtfdText
+        let rich = byType[.rtf].flatMap { NSAttributedString(rtf: $0, documentAttributes: nil)?.string }
+        // RTFD is never parsed: AppKit's RTFD reader raises an Objective-C exception on malformed
+        // data (uncatchable in Swift — one bad copy would crash Clipbot). Its text can't be checked
+        // for secrets, so a copy whose only text is RTFD is not recorded (fail closed).
+        if byType[.rtfd] != nil, plain == nil, rich == nil { return nil }
         var texts: [String] = []
-        for t in [plain, url, rtfText, rtfdText].compactMap({ $0 }) where !texts.contains(t) { texts.append(t) }
+        for t in [plain, url, rich].compactMap({ $0 }) where !texts.contains(t) { texts.append(t) }
 
         func clip(_ kind: ClipKind, _ preview: String, thumbnail: Data? = nil) -> CapturedClip {
             CapturedClip(payload: payload, kind: kind, preview: preview, thumbnail: thumbnail, texts: texts)
