@@ -1,6 +1,6 @@
 # Clipbot
 
-A private clipboard history and snippets app for macOS. It works like Clipy but is
+A private clipboard history and snippets app for macOS. It has Maccy's search popup but is
 built to be safe: passwords are never recorded, everything on disk is encrypted, and the
 app has no network access at all.
 
@@ -8,13 +8,25 @@ app has no network access at all.
 
 | Shortcut | Opens |
 |---|---|
-| **⇧⌘V** | History (10 groups of 10) and snippets |
+| **⇧⌘V** | History and snippets |
 | **⌃⌘V** | History only |
 | **⇧⌘B** | Snippets only |
 
-Pick an item (number keys `1`…`9`, `0` work inside a group) and Clipbot pastes it into
-the app you were in. The menu also has **Clear History…**, **Edit Snippets…**,
-**Settings…** and **Quit**. Clicking the clipboard icon in the menu bar opens the same menu. You
+The popup opens at the mouse cursor with the search box focused. Type to filter: every word must
+appear somewhere in the clip's text (up to its first 2,000 characters), in any order, ignoring case
+and accents. Then:
+
+| Key | Does |
+|---|---|
+| **↑ ↓** (or **⌃P ⌃N**), **⌘↑ ⌘↓** | Move the selection, jump to the first or last |
+| **Return** or click | Paste the selected item into the app you were in |
+| **⌘1**…**⌘9**, **⌘0** | Paste row 1–10 |
+| **⌥⌫** | Delete the selected clip from history |
+| **Esc** | Clear the search, then close |
+| **⌥⌘⌫**, **⌘,**, **⌘Q** | Clear History…, Settings…, Quit |
+
+Pressing the shortcut again closes it. The footer also has **Edit Snippets…**. Clicking the
+clipboard icon in the menu bar opens the popup under it. You
 can hide the icon in Settings, then reach Settings by opening Clipbot again from Spotlight.
 
 ## Install
@@ -54,7 +66,8 @@ On first launch it adds itself to Login Items. Grant two permissions:
   be read with the current key. (An old Keychain backup *on this same Mac*, together with old
   disk snapshots, could in principle still open them.)
 - **No network.** The App Sandbox has no network entitlement, so the OS blocks every
-  connection. There's no analytics, crash reporting, update checks or third-party code.
+  connection. There's no analytics, crash reporting, update checks or third-party libraries. The popup's
+  UI is adapted from [Maccy](https://github.com/p0deje/Maccy) (MIT, `docs/licenses/Maccy.txt`).
 - **Nothing syncs.** Clipbot's own pastes are marked current-host-only, so Universal
   Clipboard never sends them to your other devices.
 - **Locked-down binary.** It runs with Hardened Runtime and no exceptions, and has no debugger

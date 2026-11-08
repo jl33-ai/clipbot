@@ -69,7 +69,7 @@ final class PasteboardWatcher {
             Log.app.info("clip skipped: empty, unsupported or too large")
         case .record(let clip):
             do {
-                try store.add(clip.payload, kind: clip.kind, preview: clip.preview, thumbnail: clip.thumbnail)
+                try store.add(clip.payload, kind: clip.kind, preview: clip.preview, thumbnail: clip.thumbnail, searchText: clip.searchText)
                 Log.app.info("clip recorded: \(clip.kind.rawValue, privacy: .public), history=\(self.store.entries.count, privacy: .public)")
             } catch {
                 Log.app.error("clip store failed: \(String(describing: type(of: error)), privacy: .public)")

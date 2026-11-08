@@ -47,13 +47,14 @@ public final class HistoryStore {
 
     // MARK: Public API
 
-    public func add(_ payload: ClipPayload, kind: ClipKind, preview: String, thumbnail: Data?) throws {
+    public func add(_ payload: ClipPayload, kind: ClipKind, preview: String, thumbnail: Data?, searchText: String? = nil) throws {
         let tag = sealer.tag(payload.canonicalBytes)
         if let existing = entries.first(where: { $0.tag == tag }) {
             try moveToTop(existing.id)
             return
         }
-        let entry = ClipEntry(id: UUID(), lastUsed: Date(), kind: kind, preview: preview, thumbnail: thumbnail, tag: tag)
+        let entry = ClipEntry(id: UUID(), lastUsed: Date(), kind: kind, preview: preview, thumbnail: thumbnail, tag: tag,
+                              searchText: searchText.map { String($0.prefix(PopupSearch.maxTextLength)) })
         try SecureFiles.writeAtomically(try sealer.seal(JSONEncoder().encode(payload), context: Self.clipContext(entry.id)), to: clipURL(entry.id))
         entries.insert(entry, at: 0)
         let evicted = entries.count > capacity ? Array(entries[capacity...]) : []
@@ -78,6 +79,12 @@ public final class HistoryStore {
         e.lastUsed = Date()
         entries.insert(e, at: 0)
         try saveIndex()
+    }
+
+    /// Removes one clip and its file. Unknown ids are ignored.
+    public func delete(_ id: UUID) throws {
+        guard entries.contains(where: { $0.id == id }) else { return }
+        try remove(id)
     }
 
     /// Deletes every clip and rotates the key, so leftover ciphertext on disk is unreadable.

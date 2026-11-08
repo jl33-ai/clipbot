@@ -286,3 +286,22 @@ Manual checks: the three hotkeys, menu shape, paste into a real app, copy from
 
 Code structure, preview/thumbnail sizes, exact truncation length, file naming,
 poll interval tuning, shortcut-recorder UI, app icon (simple, generic).
+
+## Popup redesign (2026-11-08)
+
+The Clipy-style `NSMenu` is replaced by Maccy's popup, at Justin's request ("Maccy's UI is way
+better with the search bar"): a non-activating floating panel at the cursor with a search field,
+one flat list (history, then snippets under a "Snippets" label), ⌘1…⌘0 on the first ten rows and
+a footer with Clear History, Edit Snippets, Settings and Quit. Maccy's views and panel are ported
+onto Clipbot's own stores rather than adding its dependencies (Defaults, KeyboardShortcuts, Sauce,
+Fuse, SwiftData); the MIT notice is in `docs/licenses/Maccy.txt`. Left out: Maccy's preview
+slideout, pins, paste stack and fuzzy/regex search.
+
+- **Search** matches every word, in any order, ignoring case, accents and width. To match more than
+  the 60-character preview without decrypting payloads when the popup opens, each new clip's text
+  (capped at 2,000 characters) is stored as `searchText` in the encrypted index. Clips recorded
+  before this have none and are searched by preview.
+- **⌥⌫** deletes one clip (`HistoryStore.delete`). Snippets are only changed in the editor.
+- Keys are matched by physical key code, so ⌘1…⌘0 work on every layout; keys pass through to the
+  search field while an input method is composing.
+

@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var snippets: SnippetStore!
     private var watcher: PasteboardWatcher!
     private var paster: Paster!
-    private var menu: MenuController!
+    private var popup: PopupController!
     private var settingsWindow: NSWindow?
     private var editorWindow: NSWindow?
     private var bag: Set<AnyCancellable> = []
@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         watcher = PasteboardWatcher(store: history) { [prefs] in prefs.filter }
         paster = Paster(history: history, watcher: watcher, prefs: prefs)
-        menu = MenuController(history: history, snippets: snippets, paster: paster, commands: .init(
+        popup = PopupController(history: history, snippets: snippets, paster: paster, commands: .init(
             clearHistory: { [weak self] in self?.confirmClearHistory() },
             editSnippets: { [weak self] in self?.showSnippetEditor() },
             settings: { [weak self] in self?.showSettings() }))
@@ -69,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Unregister all first so swapping two shortcuts doesn't collide with itself.
         for slot in ShortcutSlot.allCases { HotKeys.shared.unregister(slot.id) }
         for slot in ShortcutSlot.allCases {
-            HotKeys.shared.register(shortcuts[slot] ?? slot.defaultValue, id: slot.id) { [weak self] in self?.menu.show(slot.menuMode) }
+            HotKeys.shared.register(shortcuts[slot] ?? slot.defaultValue, id: slot.id) { [weak self] in self?.popup.toggle(slot.popupMode) }
         }
     }
 
@@ -89,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Clicking the icon doesn't change the frontmost app, so the picked item pastes where you were.
-    @objc private func statusItemClicked() { menu.show(.all) }
+    @objc private func statusItemClicked() { popup.toggle(.all, below: statusItem?.button) }
 
     // MARK: Windows
 

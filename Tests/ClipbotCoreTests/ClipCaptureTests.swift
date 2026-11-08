@@ -87,22 +87,7 @@ final class ChangeTrackerTests: XCTestCase {
     }
 }
 
-final class MenuModelTests: XCTestCase {
-    func testGroupsTitledBySlotRange() {
-        let g = MenuModel.groups(Array(1...25))
-        XCTAssertEqual(g.map(\.title), ["1 - 10", "11 - 20", "21 - 30"])
-        XCTAssertEqual(g.map(\.items.count), [10, 10, 5])
-        XCTAssertEqual(g[1].items.first, 11)
-        XCTAssertTrue(MenuModel.groups([Int]()).isEmpty)
-        XCTAssertEqual(MenuModel.groups(Array(1...100)).count, 10)
-        XCTAssertEqual(MenuModel.groups(Array(1...100)).last?.title, "91 - 100")
-    }
-
-    func testKeyEquivalents() {
-        XCTAssertEqual((0..<10).map(MenuModel.keyEquivalent(forIndexInGroup:)), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
-        XCTAssertEqual(MenuModel.keyEquivalent(forIndexInGroup: 10), "")
-    }
-
+final class PreviewTests: XCTestCase {
     func testPreviewCollapsesAndTruncates() {
         XCTAssertEqual(Preview.text("  a\n\n\tb   c  "), "a b c")
         let long = String(repeating: "x", count: 59) + "👍🏽" + "yyyy"
