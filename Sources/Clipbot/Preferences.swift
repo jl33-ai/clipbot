@@ -16,6 +16,11 @@ final class Preferences: ObservableObject {
         get { d.bool(forKey: "didConfigureLoginItem") }
         set { d.set(newValue, forKey: "didConfigureLoginItem") }
     }
+    /// Where the app was when launch at login was last registered.
+    var loginItemPath: String? {
+        get { d.string(forKey: "loginItemPath") }
+        set { d.set(newValue, forKey: "loginItemPath") }
+    }
     var hasPromptedAccessibility: Bool {
         get { d.bool(forKey: "didPromptAccessibility") }
         set { d.set(newValue, forKey: "didPromptAccessibility") }

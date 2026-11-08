@@ -1,4 +1,7 @@
-# Clipbot
+# Dclip
+
+(Formerly Clipbot. The code, bundle id `io.linus.clipbot` and storage keep that name, so data and
+permissions carry over.)
 
 A private clipboard history and snippets app for macOS. It has Maccy's search popup but is
 built to be safe: passwords are never recorded, everything on disk is encrypted, and the
@@ -27,7 +30,7 @@ and accents. Then:
 
 Pressing the shortcut again closes it. The footer also has **Edit Snippets…**. Clicking the
 clipboard icon in the menu bar opens the popup under it. You
-can hide the icon in Settings, then reach Settings by opening Clipbot again from Spotlight.
+can hide the icon in Settings, then reach Settings by opening Dclip again from Spotlight.
 
 ## Install
 
@@ -35,7 +38,7 @@ can hide the icon in Settings, then reach Settings by opening Clipbot again from
 scripts/install.sh
 ```
 
-This builds the Release version, installs it to `/Applications/Clipbot.app` and starts it.
+This builds the Release version, installs it to `/Applications/Dclip.app` and starts it.
 On first launch it adds itself to Login Items. Grant two permissions:
 
 - **Accessibility**, so it can paste for you (System Settings → Privacy & Security → Accessibility).
@@ -68,7 +71,7 @@ On first launch it adds itself to Login Items. Grant two permissions:
 - **No network.** The App Sandbox has no network entitlement, so the OS blocks every
   connection. There's no analytics, crash reporting, update checks or third-party libraries. The popup's
   UI is adapted from [Maccy](https://github.com/p0deje/Maccy) (MIT, `docs/licenses/Maccy.txt`).
-- **Nothing syncs.** Clipbot's own pastes are marked current-host-only, so Universal
+- **Nothing syncs.** Dclip's own pastes are marked current-host-only, so Universal
   Clipboard never sends them to your other devices.
 - **Locked-down binary.** It runs with Hardened Runtime and no exceptions, and has no debugger
   entitlement in Release. It exposes no URL schemes, AppleScript, Services or extensions.
@@ -78,12 +81,12 @@ On first launch it adds itself to Login Items. Grant two permissions:
 
 - **Can't be quietly swapped.** Install with `scripts/install.sh --lock` so the app is
   root-owned and nothing running as you can replace it. If macOS ever asks you again to
-  allow Clipbot in Accessibility or the Keychain when you haven't reinstalled it, say no and
+  allow Dclip in Accessibility or the Keychain when you haven't reinstalled it, say no and
   investigate: a replaced app loses those permissions and has to ask.
 - **Debug builds are isolated.** They use the bundle id `io.linus.clipbot.debug`, with their
   own container and Keychain items, so a debuggable build can never open the real data.
 
-Outside Clipbot's control: keep **FileVault** on. Also consider turning off Handoff if you
+Outside Dclip's control: keep **FileVault** on. Also consider turning off Handoff if you
 don't want *other* apps' copies syncing via Universal Clipboard.
 
 ### Snippets backup
@@ -92,7 +95,7 @@ Snippets are encrypted with a key that only exists on this Mac. To keep a backup
 them to a new Mac, use **Edit Snippets → Export Snippets…**, which writes a plain,
 unencrypted XML file in Clipy's format. It's readable only by you and saved to Downloads by
 default, which iCloud doesn't sync. Import it with **Import from Clipy XML…**. If the key
-is ever lost, Clipbot moves the unreadable files into an `Unreadable-<date>` folder and
+is ever lost, Dclip moves the unreadable files into an `Unreadable-<date>` folder and
 sets the old Keychain entry aside, renamed `….unreadable-<date>`. It never deletes either, and
 then starts fresh.
 

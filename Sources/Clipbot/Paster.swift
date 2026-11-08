@@ -72,8 +72,8 @@ final class Paster {
     private func explainAccessibilityOnce() {
         guard !prefs.hasShownAccessibilityHelp else { return }
         prefs.hasShownAccessibilityHelp = true
-        if Alert.run("Copied — but Clipbot can't paste for you yet",
-                     "To paste automatically, allow Clipbot in System Settings → Privacy & Security → Accessibility. Until then, press ⌘V yourself.",
+        if Alert.run("Copied — but Dclip can't paste for you yet",
+                     "To paste automatically, allow Dclip in System Settings → Privacy & Security → Accessibility. Until then, press ⌘V yourself.",
                      buttons: ["Open Settings", "Not Now"]) {
             Permissions.openAccessibilitySettings()
         }

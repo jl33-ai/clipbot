@@ -31,10 +31,11 @@ struct SettingsView: View {
                     get: { loginStatus == .enabled || loginStatus == .requiresApproval },
                     set: { on in
                         do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() } catch {}
+                        if on { prefs.loginItemPath = Bundle.main.bundlePath }
                         loginStatus = SMAppService.mainApp.status
                     }))
                 if loginStatus == .requiresApproval {
-                    Text("Approve Clipbot in System Settings → General → Login Items.").foregroundStyle(.secondary)
+                    Text("Approve Dclip in System Settings → General → Login Items.").foregroundStyle(.secondary)
                 }
             }
 
@@ -79,7 +80,7 @@ struct SettingsView: View {
             } header: {
                 Text("History")
             } footer: {
-                Text("Clipbot keeps your last 100 clips, encrypted with a key held by this Mac's Secure Enclave. Nothing ever leaves this Mac: no sync, no analytics, no network access.")
+                Text("Dclip keeps your last 100 clips, encrypted with a key held by this Mac's Secure Enclave. Nothing ever leaves this Mac: no sync, no analytics, no network access.")
                     .foregroundStyle(.secondary)
             }
         }
