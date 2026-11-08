@@ -32,7 +32,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot
-        PRODUCT_NAME: Clipbot
+        PRODUCT_NAME: Dclip
         INFOPLIST_FILE: Config/Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/Clipbot.entitlements
       configs:
@@ -40,7 +40,7 @@ targets:
           # Separate identity: a Debug build (debuggable, extra sandbox exceptions) gets its own
           # container and Keychain items and can never open the real app's data.
           PRODUCT_BUNDLE_IDENTIFIER: io.linus.clipbot.debug
-          PRODUCT_NAME: Clipbot Debug
+          PRODUCT_NAME: Dclip Debug
         Release:
           # No get-task-allow: nothing may attach a debugger and read decrypted clips from memory.
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO

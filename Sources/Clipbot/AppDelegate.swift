@@ -19,13 +19,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Clipbot", isDirectory: true)
+            .appendingPathComponent("Clipbot", isDirectory: true) // the original name; kept so existing data opens
         let keys = KeychainKeyStore(service: Bundle.main.bundleIdentifier ?? KeychainKeyStore.appService)
         do {
             history = try HistoryStore(directory: dir, keys: keys)
             snippets = try SnippetStore(directory: dir, keys: keys)
         } catch {
-            fail("Clipbot can't open its encrypted storage", error)
+            fail("Dclip can't open its encrypted storage", error)
             return
         }
 
@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] in self?.registerHotKeys($0) }
             .store(in: &bag)
 
-        configureLoginItemOnFirstLaunch()
+        configureLoginItem()
         warnAboutRecoveredStores()
         if Permissions.pasteboardAccess == .denied { warnPasteboardDenied() }
         if !Permissions.accessibilityTrusted, !prefs.hasPromptedAccessibility {
@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setMenuBarIcon(_ show: Bool) {
         if show, statusItem == nil {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item.button?.image = NSImage(systemSymbolName: "list.clipboard", accessibilityDescription: "Clipbot")
+            item.button?.image = NSImage(systemSymbolName: "list.clipboard", accessibilityDescription: "Dclip")
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked)
             statusItem = item
@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     onClearHistory: { [weak self] in self?.confirmClearHistory() },
                                     onEditSnippets: { [weak self] in self?.showSnippetEditor() },
                                     onRecording: { HotKeys.shared.setSuspended($0) })
-            settingsWindow = makeWindow(title: "Clipbot Settings", view: view, size: NSSize(width: 520, height: 640))
+            settingsWindow = makeWindow(title: "Dclip Settings", view: view, size: NSSize(width: 520, height: 640))
         }
         present(settingsWindow)
     }
@@ -132,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Quit Clipbot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Dclip", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
 
@@ -158,8 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func warnSecureInput(_ holder: String?) {
-        Alert.run("Clipbot isn't recording copies right now",
-                  "Secure keyboard input is on\(holder.map { " (held by \($0))" } ?? ""), so Clipbot skips everything you copy — that's how it keeps passwords out. This normally lasts only while a password field is focused. If it keeps happening, the app above may have \"Secure Keyboard Entry\" turned on.")
+        Alert.run("Dclip isn't recording copies right now",
+                  "Secure keyboard input is on\(holder.map { " (held by \($0))" } ?? ""), so Dclip skips everything you copy — that's how it keeps passwords out. This normally lasts only while a password field is focused. If it keeps happening, the app above may have \"Secure Keyboard Entry\" turned on.")
     }
 
     // MARK: Actions & alerts
@@ -171,23 +171,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do { try history.clear() } catch { fail("Couldn't clear history", error, fatal: false) }
     }
 
-    private func configureLoginItemOnFirstLaunch() {
-        guard !prefs.hasConfiguredLoginItem else { return }
-        prefs.hasConfiguredLoginItem = true
-        try? SMAppService.mainApp.register()
+    /// Turns launch at login on the first time. After that, if the app was moved or renamed (as when
+    /// Clipbot became Dclip), the login item still points at the old path, so re-register it here.
+    private func configureLoginItem() {
+        let service = SMAppService.mainApp
+        if !prefs.hasConfiguredLoginItem {
+            prefs.hasConfiguredLoginItem = true
+            try? service.register()
+            prefs.loginItemPath = Bundle.main.bundlePath
+        } else if service.status == .enabled, prefs.loginItemPath != Bundle.main.bundlePath {
+            try? service.unregister()
+            try? service.register()
+            prefs.loginItemPath = Bundle.main.bundlePath
+            Log.app.info("login item moved to this copy of the app")
+        }
     }
 
     private func warnAboutRecoveredStores() {
         let what = [history.recoveredFromMissingKey ? "clipboard history" : nil,
                     snippets.recoveredFromMissingKey ? "snippets" : nil].compactMap { $0 }
         guard !what.isEmpty else { return }
-        Alert.run("Clipbot couldn't unlock your saved \(what.joined(separator: " and "))",
-                  "Its encryption key is missing or the data is damaged — this happens after moving to a new Mac or resetting the Keychain. Nothing was deleted: the old encrypted files were moved into an \"Unreadable\" folder in Clipbot's storage and the old key was set aside. Clipbot has started fresh. Use Edit Snippets → Import to restore snippets from an export.")
+        Alert.run("Dclip couldn't unlock your saved \(what.joined(separator: " and "))",
+                  "Its encryption key is missing or the data is damaged — this happens after moving to a new Mac or resetting the Keychain. Nothing was deleted: the old encrypted files were moved into an \"Unreadable\" folder in Dclip's storage and the old key was set aside. Dclip has started fresh. Use Edit Snippets → Import to restore snippets from an export.")
     }
 
     private func warnPasteboardDenied() {
-        if Alert.run("Clipbot isn't allowed to read the clipboard",
-                     "Clipboard history stays empty until you allow Clipbot to paste from other apps in System Settings → Privacy & Security.",
+        if Alert.run("Dclip isn't allowed to read the clipboard",
+                     "Clipboard history stays empty until you allow Dclip to paste from other apps in System Settings → Privacy & Security.",
                      buttons: ["Open Settings", "Later"]) {
             Permissions.openPrivacySettings()
         }

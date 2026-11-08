@@ -89,7 +89,7 @@ struct PopupView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            Text("Clipbot")
+            Text("Dclip")
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 5)
             SearchFieldView(query: $state.list.query)
@@ -146,7 +146,7 @@ struct PopupView: View {
             FooterRow(title: "Clear History…", shortcut: "⌥⌘⌫", action: state.actions.clearHistory)
             FooterRow(title: "Edit Snippets…", shortcut: nil, action: state.actions.editSnippets)
             FooterRow(title: "Settings…", shortcut: "⌘,", action: state.actions.settings)
-            FooterRow(title: "Quit Clipbot", shortcut: "⌘Q", action: state.actions.quit)
+            FooterRow(title: "Quit Dclip", shortcut: "⌘Q", action: state.actions.quit)
         }
         .padding(.bottom, PopupLayout.padding)
     }

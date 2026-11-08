@@ -1,9 +1,9 @@
 #!/bin/sh
-# Verifies the built app is locked down. Usage: scripts/check-security.sh [path/to/Clipbot.app]
+# Verifies the built app is locked down. Usage: scripts/check-security.sh [path/to/Dclip.app]
 # Default: the Release build in build/. Exits non-zero on any failure.
 set -u
-APP="${1:-build/Build/Products/Release/Clipbot.app}"
-BIN="$APP/Contents/MacOS/Clipbot"
+APP="${1:-build/Build/Products/Release/Dclip.app}"
+BIN="$APP/Contents/MacOS/Dclip"
 CORE="$APP/Contents/Frameworks/ClipbotCore.framework/ClipbotCore"
 FAIL=0
 pass() { echo "  ok   $1"; }
@@ -30,8 +30,8 @@ done
 PLIST="$APP/Contents/Info.plist"
 [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = "io.linus.clipbot" ] \
   && pass "bundle id io.linus.clipbot" || fail "unexpected bundle id"
-DEBUG_APP="build/Build/Products/Debug/Clipbot Debug.app"
-if [ -d "build/Build/Products/Debug/Clipbot.app" ]; then fail "stale Debug build shares the real app's identity: build/Build/Products/Debug/Clipbot.app"; fi
+DEBUG_APP="build/Build/Products/Debug/Dclip Debug.app"
+for old in Clipbot Dclip; do if [ -d "build/Build/Products/Debug/$old.app" ]; then fail "stale Debug build shares the real app's identity: build/Build/Products/Debug/$old.app"; fi; done
 if [ -d "$DEBUG_APP" ]; then
   [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$DEBUG_APP/Contents/Info.plist")" != "io.linus.clipbot" ] \
     && pass "Debug build has its own identity (can't open real data)" || fail "Debug build shares the real bundle id"
