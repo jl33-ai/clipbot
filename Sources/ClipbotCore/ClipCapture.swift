@@ -9,6 +9,8 @@ public struct CapturedClip: Sendable, Equatable {
     /// Every text form of the clip (plain, URL, extracted from RTF/RTFD), each extracted once.
     /// Used for secret checks; never stored.
     public let texts: [String]
+    /// What the popup's search matches (stored in the encrypted index).
+    public let searchText: String
 }
 
 /// Turns pasteboard items into a clip. Call only after `SecretFilter` has passed on the items'
@@ -55,20 +57,23 @@ public enum ClipCapture {
         var texts: [String] = []
         for t in [plain, url, rich].compactMap({ $0 }) where !texts.contains(t) { texts.append(t) }
 
-        func clip(_ kind: ClipKind, _ preview: String, thumbnail: Data? = nil) -> CapturedClip {
-            CapturedClip(payload: payload, kind: kind, preview: preview, thumbnail: thumbnail, texts: texts)
+        func clip(_ kind: ClipKind, _ preview: String, thumbnail: Data? = nil, searchParts: [String]? = nil) -> CapturedClip {
+            let parts = searchParts ?? [plain ?? url ?? rich].compactMap { $0 }
+            return CapturedClip(payload: payload, kind: kind, preview: preview, thumbnail: thumbnail, texts: texts,
+                                searchText: PopupSearch.text(parts.isEmpty ? [preview] : parts))
         }
 
         if !fileItems.isEmpty {
             let names = reps.compactMap { URL(dataRepresentation: $0.data, relativeTo: nil)?.lastPathComponent }
             guard let name = names.first else { return nil }
-            return clip(.file, Preview.text(names.count > 1 ? "\(name) + \(names.count - 1) more" : name))
+            return clip(.file, Preview.text(names.count > 1 ? "\(name) + \(names.count - 1) more" : name), searchParts: names)
         }
         if let image = byType[.png] ?? byType[.tiff], let size = imagePixelSize(image) {
-            return clip(.image, "Image \(size.width)×\(size.height)", thumbnail: thumbnail(fromImageData: image))
+            let label = "Image \(size.width)×\(size.height)"
+            return clip(.image, label, thumbnail: thumbnail(fromImageData: image), searchParts: [label] + texts)
         }
         let hasPDF = byType[.pdf] != nil
-        if hasPDF, plain == nil { return clip(.pdf, "PDF document") }
+        if hasPDF, plain == nil { return clip(.pdf, "PDF document", searchParts: ["PDF document"] + texts) }
         if let url, plain.map({ $0 == url }) ?? true { return clip(.url, Preview.text(url)) }
 
         let preview = Preview.text(plain ?? rich ?? "")

@@ -22,7 +22,7 @@ enum ShortcutSlot: UInt32, CaseIterable, Identifiable {
         }
     }
 
-    var menuMode: MenuMode {
+    var popupMode: PopupMode {
         switch self {
         case .main: .all
         case .history: .history

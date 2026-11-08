@@ -36,4 +36,7 @@ public struct ClipEntry: Codable, Identifiable, Equatable, Sendable {
     public let preview: String
     public let thumbnail: Data?
     public let tag: Data
+    /// The clip's text (capped), so search can match more than the preview without opening the
+    /// sealed payload. nil for clips recorded before search existed; they're searched by preview.
+    public let searchText: String?
 }
